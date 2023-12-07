@@ -77,7 +77,7 @@ class Simulation_correction():
         # Normalizing the weights to one
         self.training_weights = self.training_weights/torch.sum( self.training_weights )
 
-        for epoch in range(15):
+        for epoch in range(1):
             for batch in range(1250):
 
                 #making the graidients zero
@@ -147,6 +147,11 @@ class Simulation_correction():
 
             # I guess I should use the mc_validaiton tensor instead of this -> self.validation_inputs
             plot_utils.plot_distributions_for_tensors( np.array(self.data_test_inputs) , np.array(self.mc_test_inputs), np.array(self.samples), np.array(self.mc_test_weights.to('cpu')) )
+
+            # Now we evaluate the run3 mvaID and check how well the distributions agree
+            #(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights,path_plot)
+            plot_utils.plot_mvaID_curve(np.array(self.mc_test_inputs),np.array(self.data_test_inputs),np.array(self.samples),np.array(self.mc_test_conditions.to('cpu')), np.array(self.data_test_conditions.to('cpu')),  np.array(self.mc_test_weights.to('cpu')), np.array(self.data_test_weights))
+            plot_utils.plot_mvaID_curve_endcap(np.array(self.mc_test_inputs),np.array(self.data_test_inputs),np.array(self.samples),np.array(self.mc_test_conditions.to('cpu')), np.array(self.data_test_conditions.to('cpu')),  np.array(self.mc_test_weights.to('cpu')), np.array(self.data_test_weights))
 
         return 0
 
@@ -227,7 +232,7 @@ class Simulation_correction():
 
         # inverse transforming the test tensors
         self.mc_test_inputs = ( self.mc_test_inputs*self.input_std_for_std + self.input_mean_for_std  )
-        self.mc_test_conditions[:,:-1] = ( self.mc_test_conditions[:,:-1]*self.condition_std_for_std - self.condition_mean_for_std  )
+        self.mc_test_conditions[:,:-1] = ( self.mc_test_conditions[:,:-1]*self.condition_std_for_std + self.condition_mean_for_std  )
 
         self.samples = ( self.samples*self.input_std_for_std + self.input_mean_for_std  )
 

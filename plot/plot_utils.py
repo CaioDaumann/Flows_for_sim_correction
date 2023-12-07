@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import mplhep, hist
 plt.style.use([mplhep.style.CMS])
 import mplhep as hep
+import xgboost
 
 # this is the main plotting function, all the other will basically set up something to call this one in the end!
 def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
@@ -124,6 +125,8 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
     ax[0].tick_params(labelsize=24)
     #ax.set_ylim(0., 1.1*ax.get_ylim()[1])
     ax[1].set_ylim(0.5, 1.5)
+    if( 'mva' in xlabel ):
+        ax[1].set_ylim(0.75, 1.25)
 
     ax[0].legend(
         loc="upper right", fontsize=24
@@ -229,3 +232,101 @@ def plot_loss_cruve(training,validation):
 
         plt.savefig('plots/loss_plot.png') 
         plt.close()
+
+def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights):
+    
+    model_path = './run3_mvaID_models/'
+
+    photonid_mva = xgboost.Booster()
+    photonid_mva.load_model( model_path + "model.json" )
+
+    # The mvaID model are separted into barrel and endcap, we first evaluate the barrel here. So, we make a cut in eta
+    mask_mc,mask_data = np.abs(mc_conditions[:,1]) < 1.4222, np.abs(data_conditions[:,1]) < 1.4222
+
+    # apply the barrel only condition
+    data_inputs, mc_inputs, nl_inputs  =  data_inputs[mask_data]    , mc_inputs[mask_mc]     ,nl_inputs[mask_mc]
+    data_conditions,mc_conditions      = data_conditions[mask_data] , mc_conditions[mask_mc]
+    data_weights,mc_weights            = data_weights[mask_data]    , mc_weights[mask_mc]
+
+    #mkaing sure there are no inf or nan's on the tensors
+    np.nan_to_num(nl_inputs, nan=0.0, posinf = 0.0, neginf = 0.0)
+    np.nan_to_num(mc_conditions, nan=0.0, posinf = 0.0, neginf = 0.0)
+
+    data_tempmatrix = xgboost.DMatrix( np.concatenate( [data_inputs[:,:-4] , data_conditions[:,1].reshape(-1,1) , data_conditions[:,3].reshape(-1,1) ], axis =1 ) )
+    nl_tempmatrix   = xgboost.DMatrix( np.concatenate( [nl_inputs[:,:-4]   , mc_conditions[:,1].reshape(-1,1)   , mc_conditions[:,3].reshape(-1,1) ], axis =1 ) )
+    mc_tempmatrix   = xgboost.DMatrix( np.concatenate( [mc_inputs[:,:-4]   , mc_conditions[:,1] .reshape(-1,1)  , mc_conditions[:,3].reshape(-1,1) ], axis =1 ) )
+
+    #evaluating the network!
+    data_mvaID = photonid_mva.predict(data_tempmatrix)
+    nl_mvaID = photonid_mva.predict(nl_tempmatrix)
+    mc_mvaID = photonid_mva.predict(mc_tempmatrix)
+
+    # needed transformation. See more details oin HiggsDNA -> https://gitlab.cern.ch/HiggsDNA-project/HiggsDNA/-/blob/master/higgs_dna/tools/photonid_mva.py?ref_type=heads#L56
+    data_mvaID = 1 - (2/(1+np.exp( 2*data_mvaID )))
+    nl_mvaID   = 1 - (2/(1+np.exp( 2*nl_mvaID )))
+    mc_mvaID   = 1 - (2/(1+np.exp( 2*mc_mvaID )))
+
+    # now, we create and fill the histograms with the mvaID distributions
+    mc_mva      = hist.Hist(hist.axis.Regular(60, -0.9, 1.0))
+    nl_mva      = hist.Hist(hist.axis.Regular(60, -0.9, 1.0))
+    data_mva    = hist.Hist(hist.axis.Regular(60, -0.9, 1.0))
+
+    mc_mva.fill( mc_mvaID, weight = (1e6)*mc_weights )
+    nl_mva.fill( nl_mvaID, weight = (1e6)*mc_weights )
+    data_mva.fill( data_mvaID, weight = (1e6)*data_weights  )
+
+    plott( data_mva , mc_mva, nl_mva , 'plots/results/mvaID_barrel.png', xlabel = "Barrel mvaID"  )
+
+
+def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights):
+    
+    model_path = './run3_mvaID_models/'
+
+    photonid_mva = xgboost.Booster()
+    photonid_mva.load_model( model_path + "model_endcap.json" )
+
+    # The mvaID model are separted into barrel and endcap, we first evaluate the barrel here. So, we make a cut in eta
+    mask_mc,mask_data = np.abs(mc_conditions[:,1]) > 1.56, np.abs(data_conditions[:,1]) > 1.56
+
+    # apply the barrel only condition
+    data_inputs, mc_inputs, nl_inputs  =  data_inputs[mask_data]    , mc_inputs[mask_mc]     ,nl_inputs[mask_mc]
+    data_conditions,mc_conditions      = data_conditions[mask_data] , mc_conditions[mask_mc]
+    data_weights,mc_weights            = data_weights[mask_data]    , mc_weights[mask_mc]
+
+    #mkaing sure there are no inf or nan's on the tensors
+    np.nan_to_num(nl_inputs, nan=0.0, posinf = 0.0, neginf = 0.0)
+    np.nan_to_num(mc_conditions, nan=0.0, posinf = 0.0, neginf = 0.0)
+
+    # since we now also have the energyErr in the input vector, we need to take one out
+    data_inputs = data_inputs[:,:-1]
+    mc_inputs   = mc_inputs[:,:-1]
+    nl_inputs   = nl_inputs[:,:-1]
+
+    data_hcalIso = data_inputs[:, np.shape(data_inputs)[1] -1 ]
+    mc_hcalIso   = mc_inputs[:, np.shape(data_inputs)[1] -1 ]
+    nl_hcalIso   = nl_inputs[:, np.shape(data_inputs)[1] -1 ]
+
+    data_tempmatrix = xgboost.DMatrix( np.concatenate( [data_inputs[:,:9], data_hcalIso.reshape(-1,1)  , data_inputs[:,9:np.shape(data_inputs)[1] -3] , data_conditions[:,1].reshape(-1,1) , data_conditions[:,3].reshape(-1,1)  , data_inputs[:, np.shape(data_inputs)[1] -3:np.shape(data_inputs)[1] -1] ], axis =1 ) )
+    nl_tempmatrix   = xgboost.DMatrix( np.concatenate( [nl_inputs[:,:9]  , nl_hcalIso.reshape(-1,1)    , nl_inputs[:,9:np.shape(data_inputs)[1] -3]   , mc_conditions[:,1].reshape(-1,1)   , mc_conditions[:,3].reshape(-1,1)    , nl_inputs[:,   np.shape(data_inputs)[1] -3:np.shape(data_inputs)[1] -1] ], axis =1 ) )
+    mc_tempmatrix   = xgboost.DMatrix( np.concatenate( [mc_inputs[:,:9]  , mc_hcalIso.reshape(-1,1)    , mc_inputs[:,9:np.shape(data_inputs)[1] -3]   ,mc_conditions[:,1] .reshape(-1,1)   , mc_conditions[:,3].reshape(-1,1)    , mc_inputs[:,   np.shape(data_inputs)[1] -3:np.shape(data_inputs)[1] -1] ], axis =1 ) )
+
+    #evaluating the network!
+    data_mvaID = photonid_mva.predict(data_tempmatrix)
+    nl_mvaID = photonid_mva.predict(nl_tempmatrix)
+    mc_mvaID = photonid_mva.predict(mc_tempmatrix)
+
+    # needed transformation. See more details oin HiggsDNA -> https://gitlab.cern.ch/HiggsDNA-project/HiggsDNA/-/blob/master/higgs_dna/tools/photonid_mva.py?ref_type=heads#L56
+    data_mvaID = 1 - (2/(1+np.exp( 2*data_mvaID )))
+    nl_mvaID   = 1 - (2/(1+np.exp( 2*nl_mvaID )))
+    mc_mvaID   = 1 - (2/(1+np.exp( 2*mc_mvaID )))
+
+    # now, we create and fill the histograms with the mvaID distributions
+    mc_mva      = hist.Hist(hist.axis.Regular(60, -0.9, 1.0))
+    nl_mva      = hist.Hist(hist.axis.Regular(60, -0.9, 1.0))
+    data_mva    = hist.Hist(hist.axis.Regular(60, -0.9, 1.0))
+
+    mc_mva.fill( mc_mvaID, weight = (1e6)*mc_weights )
+    nl_mva.fill( nl_mvaID, weight = (1e6)*mc_weights )
+    data_mva.fill( data_mvaID, weight = (1e6)*data_weights  )
+
+    plott( data_mva , mc_mva, nl_mva , 'plots/results/mvaID_endcap.png', xlabel = "End cap mvaID"  )
