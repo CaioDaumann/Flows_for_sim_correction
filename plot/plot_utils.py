@@ -25,7 +25,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
 
     hep.histplot(
         mc_rw_hist,
-        label = r'$Z\rightarrow ee$ w/ rw',
+        label = r'$Z\rightarrow ee$ Corr',
         density = True,
         color = "red",
         linewidth=3,
@@ -139,6 +139,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
 
     return 0
 
+# This is a plot distribution suitable for dataframes, if one wants to plot tensors see "plot_distributions_for_tensors()"
 def plot_distributions( path, data_df, mc_df, mc_weights, variables_to_plot ):
 
     for set in variables_to_plot:
@@ -169,3 +170,62 @@ def plot_distributions( path, data_df, mc_df, mc_weights, variables_to_plot ):
             mc_rw_hist.fill( np.array(mc_df[key]) , weight = mc_weights )
 
             plott( data_hist , mc_hist, mc_rw_hist , 'plots/' +  str(key) +".png", xlabel = str(key)  )
+
+def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_weights ):
+
+    # We want to correct the variables that are used as input to run3 photon MVA ID
+    var_list = ["probe_energyRaw",
+                "probe_r9", 
+                "probe_sieie",
+                "probe_etaWidth",
+                "probe_phiWidth",
+                "probe_sieip",
+                "probe_s4",
+                "probe_hoe",
+                "probe_ecalPFClusterIso",
+                "probe_trkSumPtHollowConeDR03",
+                "probe_trkSumPtSolidConeDR04",
+                "probe_pfChargedIso",
+                "probe_pfChargedIsoWorstVtx",
+                "probe_esEffSigmaRR",
+                "probe_esEnergyOverRawE",
+                "probe_hcalPFClusterIso",
+                "probe_energyErr"]
+
+
+    for i in range( np.shape( data_tensor )[1] ):
+
+            mean = np.mean( np.array(data_tensor[:,i]) )
+            std  = np.std(  np.array(data_tensor[:,i]) )
+
+            data_hist            = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
+            mc_hist              = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
+            mc_rw_hist           = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
+
+            data_hist.fill( np.array(data_tensor[:,i]   )  )
+            mc_hist.fill(  np.array( mc_tensor[:,i]),  weight = 1e6*mc_weights )
+
+            #print( np.shape( np.array(drell_yan_df[key]) ) , np.shape( mc_weights  ) )
+
+            mc_rw_hist.fill( np.array( flow_samples[:,i]) , weight = 1e6*mc_weights )
+
+            plott( data_hist , mc_hist, mc_rw_hist , 'plots/results/' +  str(var_list[i]) +".png", xlabel = str(var_list[i])  )
+
+def plot_loss_cruve(training,validation):
+
+        fig, ax1 = plt.subplots()
+
+        # Plot training loss on the first axis
+        color = 'tab:blue'
+        ax1.set_xlabel('Epochs')
+        ax1.set_ylabel('Training Loss', color=color)
+        ax1.plot(training, color=color, marker='o', label='Training Loss')
+        ax1.plot(validation, color='tab:orange', marker='x', label='Validation Loss')
+        ax1.tick_params(axis='y', labelcolor=color)
+        ax1.legend()
+
+        # Title and show the plot
+        plt.title('Training Loss and MVA_chsqrd')
+
+        plt.savefig('plots/loss_plot.png') 
+        plt.close()

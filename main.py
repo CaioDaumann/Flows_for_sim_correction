@@ -10,6 +10,7 @@ import pandas as pd
 # importing other scripts
 import data_reading.read_data as data_reader
 import plot.plot_utils        as plot_utils
+import normalizing_flows.training_utils as training_utils
 
 def main():
     print("Welcome to the simulation corrections 2000!")
@@ -22,7 +23,9 @@ def main():
         data_reader.read_zee_data()
 
     # Now, we call the class that handles the transformations, training and validaiton of the corrections
-
+    corrections = training_utils.Simulation_correction()
+    corrections.setup_flow()
+    corrections.train_the_flow()
 
 
 if __name__ == "__main__":

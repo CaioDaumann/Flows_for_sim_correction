@@ -112,14 +112,23 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
 
     #first we shuffle all the arrays!
     permutation = np.random.permutation(len(data_weights))
-    data_inputs      = data_inputs[permutation]
-    data_conditions  = data_conditions[permutation]
-    data_weights     = data_weights[permutation]
+    data_inputs      = torch.tensor(data_inputs[permutation])
+    data_conditions  = torch.tensor(data_conditions[permutation])
+    data_weights     = torch.tensor(data_weights[permutation])
 
     permutation = np.random.permutation(len(mc_weights))
-    mc_inputs      = mc_inputs[permutation]
-    mc_conditions  = mc_conditions[permutation]
-    mc_weights     = mc_weights[permutation]
+    mc_inputs      = torch.tensor(mc_inputs[permutation])
+    mc_conditions  = torch.tensor(mc_conditions[permutation])
+    mc_weights     = torch.tensor(mc_weights[permutation])
+
+    # Now, in ordert not to bias the network we choose make sure the tensors of data and simulation have the same number of events
+    mc_inputs = mc_inputs[ :len(data_inputs) ]
+    mc_conditions = mc_conditions[ :len(data_inputs) ]
+    mc_weights = mc_weights[ :len(data_inputs) ]
+    
+    assert len( mc_weights )    == len( data_weights )
+    assert len( mc_conditions ) == len(data_conditions)
+
 
     # Now, the fun part! - Separating everyhting into trainnig, validation and testing datasets!
     data_training_inputs     = data_inputs[: int( 0.6*len(data_inputs  )) ] 
@@ -178,7 +187,7 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
     torch.save( mc_test_conditions   , path_to_save_tensors + 'mc_test_conditions.pt')
     torch.save( mc_test_weights      , path_to_save_tensors + 'mc_test_weights.pt')     
 
-    return 0
+    return path_to_save_tensors
 
 def read_zee_data():
 
@@ -208,16 +217,16 @@ def read_zee_data():
 
     # Lets now read the data and simultion as pandas dataframes
     files_DY_mc  = glob.glob( path_to_data + "DY_postEE_v12/nominal/*.parquet")
-    files_DY_mc = files_DY_mc[:40]
+    files_DY_mc = files_DY_mc[:100]
     simulation   = [pd.read_parquet(f) for f in files_DY_mc]
     drell_yan_df = pd.concat(simulation,ignore_index=True)
 
     # now the data files for the epochs F and G
     files_DY_data_F = glob.glob( "/net/scratch_cms3a/daumann/nanoAODv12_Production/Data_Run2022F_v12/nominal/*.parquet")
-    files_DY_data_F = files_DY_data_F[:60]
+    files_DY_data_F = files_DY_data_F[:200]
 
     files_DY_data_G  = glob.glob( "/net/scratch_cms3a/daumann/nanoAODv12_Production/Data_Run2022G_v12/nominal/*.parquet")
-    files_DY_data_G = files_DY_data_G[:60]
+    files_DY_data_G = files_DY_data_G[:200]
 
     # merhging both dataframes
     files_DY_data = [files_DY_data_G,files_DY_data_F]
@@ -249,3 +258,4 @@ def read_zee_data():
     separate_training_data(data_df[mask_data], drell_yan_df[mask_mc], mc_weights, data_weights, var_list, conditions_list)
 
     print('\n End of data reading! - No errors encountered! ')
+    print( 'Number of MC events: ', len(drell_yan_df[mask_mc] ), ' Number of data events: ', len(data_df[mask_data]))
