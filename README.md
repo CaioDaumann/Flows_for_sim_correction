@@ -12,7 +12,7 @@ The images below shows preliminary results where the blue histogram is the nomin
 
 HoverE is a example of distirbution not well modeled and that needs to be corrected.
 
-![plot](./plot/probe_hoe.png)[width=0.5\textwidth]
+<img src="./plot/probe_hoe.png" width="50%">
 
 After correcting all variables used as input to the mvaID BDT, we can reevaluate it, and check that the flow corrected values achieve a better closure than the nominal simulation.
 
