@@ -32,7 +32,7 @@ class EarlyStopper:
 # But also perform the needed valdiaitons on Z->mumugamma and Diphoton samples 
 class Simulation_correction():
    
-    def __init__(self):
+    def __init__(self, configuration, n_transforms, n_splines_bins, aux_nodes, aux_layers, max_epoch_number, initial_lr, batch_size):
 
         # Checking if cuda is avaliable
         print('Checking cuda avaliability: ', torch.cuda.is_available())
@@ -43,23 +43,45 @@ class Simulation_correction():
         self.read_saved_tensor()
         self.perform_transformation()
 
+        # defining the flow hyperparametrs as menbers of the class
+        self.n_transforms   = n_transforms
+        self.n_splines_bins = n_splines_bins
+        self.aux_nodes      = aux_nodes
+        self.aux_layers     = aux_layers
+
+        # general training hyperparameters
+        self.max_epoch_number = max_epoch_number
+        self.initial_lr       = initial_lr
+        self.batch_size       = batch_size
+
+        # Now, lets open a directory to store the results and models of a given configuration
+        self.configuration =  configuration
+        #lets create a folder with the results
+        try:
+            print('\nThis run dump folder: ', os.getcwd() + '/results/' +self.configuration + '/')
+            #already creating the folders to store the flow states and the plots
+            os.makedirs(os.getcwd() + '/results/' +self.configuration + '/',  exist_ok=True)
+            os.makedirs(os.getcwd() + '/results/' +self.configuration + '/saved_states/',  exist_ok=True)
+        except:
+            print('\nIt was not possible to open the dump folder')
+            exit()
+
+        # folder to which the code will store the results
+        self.dump_folder = os.getcwd() + '/results/' +self.configuration + '/'
+
     # performs the training of the normalizing flows
     def setup_flow(self):
 
-        # setting up some flow parameters. Change this to be read from a file or something like that
-        n_coupling_blocks = 6
-        number_of_nodes   = 256
-        lr = 1e-3
 
         # The library we are using is zuko! 
-        flow = zuko.flows.NSF(self.training_inputs.size()[1], context=self.training_conditions.size()[1], transforms=n_coupling_blocks, hidden_features=[number_of_nodes] * 3)
+        flow = zuko.flows.NSF(self.training_inputs.size()[1], context=self.training_conditions.size()[1], bins = self.n_splines_bins ,transforms = self.n_transforms, hidden_features=[self.aux_nodes] * self.aux_layers)
         flow.to(self.device)
         self.flow = flow
 
-        self.optimizer = torch.optim.AdamW(self.flow.parameters(), lr=lr, weight_decay=1e-5)
+        self.optimizer = torch.optim.AdamW(self.flow.parameters(), lr= self.initial_lr, weight_decay=1e-6)
 
         #defining the parameters of the lr scheduler and early stopper!
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', patience=5)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', patience = 10)
         
         patiente_early = 11
         self.early_stopper = EarlyStopper(patience = patiente_early, min_delta=0.000)
@@ -77,14 +99,14 @@ class Simulation_correction():
         # Normalizing the weights to one
         self.training_weights = self.training_weights/torch.sum( self.training_weights )
 
-        for epoch in range(1):
+        for epoch in range(999):
             for batch in range(1250):
 
                 #making the graidients zero
                 self.optimizer.zero_grad()
 
                 # "Sampling" the batch from the array
-                idxs = torch.randint(low=0, high= self.training_inputs.size()[0], size= (1024,))
+                idxs = torch.randint(low=0, high= self.training_inputs.size()[0], size= (512,))
 
                 loss = self.training_weights[idxs]*(-self.flow(self.training_conditions[idxs]).log_prob( self.training_inputs[idxs]))
                 loss = loss.mean()
@@ -95,6 +117,8 @@ class Simulation_correction():
 
                 self.optimizer.step()
 
+            # End of the epoch! - calculating the validation loss and saving nescessary information!
+            torch.save(self.flow.state_dict(), os.getcwd() + "/results/saved_states/epoch_"+str(epoch)+".pth")
             # Switching off the gradients calculation for the validation phase
             with torch.no_grad():
 
@@ -108,9 +132,24 @@ class Simulation_correction():
                 self.training_loss_array.append(   float(1e6*loss) )
                 self.validation_loss_array.append( float(validation_loss) )
 
+                # updating the lr scheduler
+                self.scheduler.step( validation_loss )
+
                 print( 'Epoch: ', epoch , ' Training loss: ', float( loss*1e6 ) , ' Validation loss: ', float(validation_loss) )
 
-        plot_utils.plot_loss_cruve(self.training_loss_array, self.validation_loss_array)
+                if( self.early_stopper.early_stop( float( validation_loss ) ) or epoch > self.max_epoch_number ):
+
+                    print( 'Best epoch loss: ', np.min(  np.array( self.validation_loss_array )  ) , ' at epoch: ', np.argmin( np.array( np.array( self.validation_loss_array ) ) ) )
+                    
+                    # Lets select the model with the best validation loss
+                    self.flow.load_state_dict(torch.load( './results//saved_states/epoch_'+str(np.argmin( np.array( np.array( self.validation_loss_array )) )) +'.pth'))
+                    torch.save(self.flow.state_dict(), self.dump_folder + "/best_model_.pth")
+        
+                    print('\nEnd of model training! Now procedding to performance evaluation. This may take a while ... \n')
+
+                    break
+
+        plot_utils.plot_loss_cruve(self.training_loss_array, self.validation_loss_array, self.dump_folder)
         # call the function that performs the final plots!
         self.evaluate_results()
 
@@ -146,12 +185,12 @@ class Simulation_correction():
             self.mc_test_inputs          = self.mc_test_inputs.to('cpu')
 
             # I guess I should use the mc_validaiton tensor instead of this -> self.validation_inputs
-            plot_utils.plot_distributions_for_tensors( np.array(self.data_test_inputs) , np.array(self.mc_test_inputs), np.array(self.samples), np.array(self.mc_test_weights.to('cpu')) )
+            plot_utils.plot_distributions_for_tensors( np.array(self.data_test_inputs) , np.array(self.mc_test_inputs), np.array(self.samples), np.array(self.mc_test_weights.to('cpu')), self.dump_folder )
 
             # Now we evaluate the run3 mvaID and check how well the distributions agree
             #(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights,path_plot)
-            plot_utils.plot_mvaID_curve(np.array(self.mc_test_inputs),np.array(self.data_test_inputs),np.array(self.samples),np.array(self.mc_test_conditions.to('cpu')), np.array(self.data_test_conditions.to('cpu')),  np.array(self.mc_test_weights.to('cpu')), np.array(self.data_test_weights))
-            plot_utils.plot_mvaID_curve_endcap(np.array(self.mc_test_inputs),np.array(self.data_test_inputs),np.array(self.samples),np.array(self.mc_test_conditions.to('cpu')), np.array(self.data_test_conditions.to('cpu')),  np.array(self.mc_test_weights.to('cpu')), np.array(self.data_test_weights))
+            plot_utils.plot_mvaID_curve(np.array(self.mc_test_inputs),np.array(self.data_test_inputs),np.array(self.samples),np.array(self.mc_test_conditions.to('cpu')), np.array(self.data_test_conditions.to('cpu')),  np.array(self.mc_test_weights.to('cpu')), np.array(self.data_test_weights), self.dump_folder)
+            plot_utils.plot_mvaID_curve_endcap(np.array(self.mc_test_inputs),np.array(self.data_test_inputs),np.array(self.samples),np.array(self.mc_test_conditions.to('cpu')), np.array(self.data_test_conditions.to('cpu')),  np.array(self.mc_test_weights.to('cpu')), np.array(self.data_test_weights), self.dump_folder)
 
         return 0
 
@@ -162,14 +201,20 @@ class Simulation_correction():
         # Lets now apply the Isolation transformation into the isolation variables
         # This "self.indexes_for_iso_transform" are the indexes of the variables in the inputs= tensors where the isolation variables are stored
         # and thus, where the transformations will be performed
-        self.indexes_for_iso_transform = [6,7,8,9,10,11,12,13,14]
+        self.indexes_for_iso_transform = [7,8,9,10,11,12,13,14,15] #[6,7,8,9,10,11,12,13,14] #this has to be changed once I take the energy raw out of the inputs
         self.vector_for_iso_constructors_mc   = []
         self.vector_for_iso_constructors_data = []
 
         # creating the constructors
         for index in self.indexes_for_iso_transform:
-            self.vector_for_iso_constructors_data.append( Make_iso_continuous(self.data_training_inputs[:,index]) )
-            self.vector_for_iso_constructors_mc.append( Make_iso_continuous(self.mc_training_inputs[:,index]) )
+            
+            # since hoe has very low values, the shift value (value until traingular events are sampled) must be diferent here
+            if( index == 7 ):
+                self.vector_for_iso_constructors_data.append( Make_iso_continuous(self.data_training_inputs[:,index], b = 0.001) )
+                self.vector_for_iso_constructors_mc.append( Make_iso_continuous(self.mc_training_inputs[:,index] , b= 0.001) )
+            else:
+                self.vector_for_iso_constructors_data.append( Make_iso_continuous(self.data_training_inputs[:,index]) )
+                self.vector_for_iso_constructors_mc.append( Make_iso_continuous(self.mc_training_inputs[:,index]) )
 
         # now really applying the transformations
         counter = 0
@@ -219,6 +264,9 @@ class Simulation_correction():
         self.mc_test_inputs = ( self.mc_test_inputs - self.input_mean_for_std  )/self.input_std_for_std
         self.mc_test_conditions[:,:-1] = ( self.mc_test_conditions[:,:-1] - self.condition_mean_for_std  )/self.condition_std_for_std
 
+        # Lets now plot the distirbutions after the transformations
+        plot_utils.plot_distributions_after_transformations(self.training_inputs.clone().detach().cpu(), self.training_conditions.clone().detach().cpu(), self.training_weights.clone().detach().cpu())
+
     # this function will be responsable to perform the inverse transformations in data
     def invert_transformation(self):
         
@@ -236,13 +284,9 @@ class Simulation_correction():
 
         self.samples = ( self.samples*self.input_std_for_std + self.input_mean_for_std  )
 
-        # now inverting the isolation transformation
-        # now really applying the transformations
+        # Now inverting the isolation transformation
         counter = 0
         for index in self.indexes_for_iso_transform:
-            
-            #self.data_validation_inputs[:,index] = self.vector_for_iso_constructors_data[counter].inverse_shift_and_sample(self.data_validation_inputs[:,index])
-            #self.mc_validation_inputs[:,index]   = self.vector_for_iso_constructors_mc[counter].inverse_shift_and_sample(self.mc_validation_inputs[:,index])
             
             # for the test dataset, we only have to transform the mc part
             self.mc_test_inputs[:,index] = self.vector_for_iso_constructors_mc[counter].inverse_shift_and_sample(self.mc_test_inputs[:,index], processed = True)
@@ -251,8 +295,6 @@ class Simulation_correction():
             self.samples[:,index] = self.vector_for_iso_constructors_mc[counter].inverse_shift_and_sample(self.samples[:,index], processed = True)
 
             counter = counter + 1
-
-
 
     # this funcitions is responable for reading the files processed and saved by the read_data.py files
     # The tensors should already be ready for training, just plug and play!
@@ -295,27 +337,27 @@ class Make_iso_continuous:
         #tensor = tensor.cpu()
         self.iso_bigger_zero  = tensor > 0 
         self.iso_equal_zero   = tensor == 0
-        self.lowest_iso_value = torch.min( tensor[self.iso_bigger_zero] )
+        #self.lowest_iso_value = torch.min( tensor[self.iso_bigger_zero] )
         self.shift = 0.05
         if( b ):
-            self.shift = 0.5
+            self.shift = b
         self.n_zero_events = torch.sum( self.iso_equal_zero )
         self.before_transform = tensor.clone().detach()
         #self.tensor_dtype = tensor.dtype()
 
     #Shift the continous part of the continous distribution to (self.shift), and then sample values for the discontinous part
     def shift_and_sample(self, tensor):
-        #tensor = tensor.cpu()
         
-        bigger_than_zero     = tensor  > 0
-        tensor_zero          = tensor == 0
-        self.lowest_iso_value = 0 #torch.min( tensor[ tensor_zero ] )
+        # defining two masks to keep track of the events in the 0 peak and at the continous tails
+        bigger_than_zero      = tensor  > 0
+        tensor_zero           = tensor == 0
+        self.lowest_iso_value = 0 
 
-        #print( tensor.dtype , tensor[ bigger_than_zero ].dtype , tensor[ tensor_zero ].dtype )
-
-        tensor[ bigger_than_zero ] = + self.shift -self.lowest_iso_value + tensor[ bigger_than_zero ]
-        tensor[ tensor_zero ]    = torch.tensor(np.random.triangular( left = 0. , mode = 0, right = self.shift*0.99, size = tensor[tensor_zero].size()[0]   ), dtype = tensor[ tensor_zero ].dtype )
-        tensor = torch.log(  1e-3 + tensor ) #performing the log trnasform on top of the smoothing!
+        tensor[ bigger_than_zero ] = tensor[ bigger_than_zero ] + self.shift -self.lowest_iso_value 
+        tensor[ tensor_zero ]      = torch.tensor(np.random.triangular( left = 0. , mode = 0, right = self.shift*0.99, size = tensor[tensor_zero].size()[0]   ), dtype = tensor[ tensor_zero ].dtype )
+        
+        # now a log trasform is applied on top of the smoothing to stretch the events in the 0 traingular and "kill" the iso tails
+        tensor = torch.log(  1e-3 + tensor ) 
         
         return tensor.to('cuda')
     
@@ -328,7 +370,7 @@ class Make_iso_continuous:
         lower_than_shift  = tensor < self.shift
 
         tensor[ lower_than_shift  ] = 0
-        tensor[ bigger_than_shift ] = - self.shift +self.lowest_iso_value + tensor[ bigger_than_shift ]
+        tensor[ bigger_than_shift ] = tensor[ bigger_than_shift ] - self.shift + self.lowest_iso_value 
         
 
         #making sure the inverse operation brough exaclty the same tensor back!
@@ -337,6 +379,5 @@ class Make_iso_continuous:
         else:
             assert (abs(torch.sum(  self.before_transform - tensor )) < tensor.size()[0]*1e-6 )
             #added the tensor.size()[0]*1e-6 term due to possible numerical fluctioations!
-        
-            
+              
         return tensor.to('cuda')

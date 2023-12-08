@@ -217,16 +217,16 @@ def read_zee_data():
 
     # Lets now read the data and simultion as pandas dataframes
     files_DY_mc  = glob.glob( path_to_data + "DY_postEE_v12/nominal/*.parquet")
-    files_DY_mc = files_DY_mc[:100]
+    files_DY_mc = files_DY_mc[:250]
     simulation   = [pd.read_parquet(f) for f in files_DY_mc]
     drell_yan_df = pd.concat(simulation,ignore_index=True)
 
     # now the data files for the epochs F and G
     files_DY_data_F = glob.glob( "/net/scratch_cms3a/daumann/nanoAODv12_Production/Data_Run2022F_v12/nominal/*.parquet")
-    files_DY_data_F = files_DY_data_F[:200]
+    files_DY_data_F = files_DY_data_F[:450]
 
     files_DY_data_G  = glob.glob( "/net/scratch_cms3a/daumann/nanoAODv12_Production/Data_Run2022G_v12/nominal/*.parquet")
-    files_DY_data_G = files_DY_data_G[:200]
+    files_DY_data_G = files_DY_data_G[:450]
 
     # merhging both dataframes
     files_DY_data = [files_DY_data_G,files_DY_data_F]

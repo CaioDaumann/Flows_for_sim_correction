@@ -47,14 +47,13 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
     )
 
 
-
     ax[0].set_xlabel('')
     ax[0].margins(y=0.15)
     ax[0].set_ylim(0, 1.05*ax[0].get_ylim()[1])
     ax[0].tick_params(labelsize=22)
 
     #log scale for Iso variables
-    if( "Iso" in str(xlabel) or "DR" in str(xlabel) or 'r9' in str(xlabel) or 's4' in str(xlabel)   ):
+    if( "Iso" in str(xlabel) or "DR" in str(xlabel) or 'r9' in str(xlabel) or 's4' in str(xlabel) or "esE" in str(xlabel)   ):
         ax[0].set_yscale('log')
         #ax[0].set_ylim(0.001,( np.max(data_hist)/1.5e6 ))
         ax[0].set_ylim(0.001, 10.05*ax[0].get_ylim()[1])
@@ -78,8 +77,6 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
     integral_mc_rw = mc_rw_hist.sum() * (mc_hist_rw_numpy[1][1] - mc_hist_rw_numpy[1][0])
     ratio_rw = (data_hist_numpy[0] / integral_data) / ( (mc_hist_rw_numpy[0] +1e-15 ) / integral_mc_rw)
     ratio_rw = np.nan_to_num(ratio_rw)
-
-
 
     errors_nom = (np.sqrt(data_hist_numpy[0])/integral_data) / ( (mc_hist_numpy[0] + 1e-15 ) / integral_mc)
     errors_nom = np.abs(np.nan_to_num(errors_nom))
@@ -174,7 +171,7 @@ def plot_distributions( path, data_df, mc_df, mc_weights, variables_to_plot ):
 
             plott( data_hist , mc_hist, mc_rw_hist , 'plots/' +  str(key) +".png", xlabel = str(key)  )
 
-def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_weights ):
+def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_weights, plot_path ):
 
     # We want to correct the variables that are used as input to run3 photon MVA ID
     var_list = ["probe_energyRaw",
@@ -201,20 +198,22 @@ def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_wei
             mean = np.mean( np.array(data_tensor[:,i]) )
             std  = np.std(  np.array(data_tensor[:,i]) )
 
-            data_hist            = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
-            mc_hist              = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
-            mc_rw_hist           = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
+            if( 'Iso' in str(var_list[i]) or 'DR' in str(var_list[i]) or 'esE' in str(var_list[i]) or 'hoe' in str(var_list[i])  ):
+                data_hist            = hist.Hist(hist.axis.Regular(70, 0.0 , mean + 2.0*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(70, 0.0 , mean + 2.0*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(70, 0.0 , mean + 2.0*std))
+            else:
+                data_hist            = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
 
             data_hist.fill( np.array(data_tensor[:,i]   )  )
             mc_hist.fill(  np.array( mc_tensor[:,i]),  weight = 1e6*mc_weights )
-
-            #print( np.shape( np.array(drell_yan_df[key]) ) , np.shape( mc_weights  ) )
-
             mc_rw_hist.fill( np.array( flow_samples[:,i]) , weight = 1e6*mc_weights )
 
-            plott( data_hist , mc_hist, mc_rw_hist , 'plots/results/' +  str(var_list[i]) +".png", xlabel = str(var_list[i])  )
+            plott( data_hist , mc_hist, mc_rw_hist , plot_path +  str(var_list[i]) +".png", xlabel = str(var_list[i])  )
 
-def plot_loss_cruve(training,validation):
+def plot_loss_cruve(training,validation, plot_path):
 
         fig, ax1 = plt.subplots()
 
@@ -230,10 +229,10 @@ def plot_loss_cruve(training,validation):
         # Title and show the plot
         plt.title('Training Loss and MVA_chsqrd')
 
-        plt.savefig('plots/loss_plot.png') 
+        plt.savefig( plot_path + 'loss_plot.png') 
         plt.close()
 
-def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights):
+def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights, plot_path):
     
     model_path = './run3_mvaID_models/'
 
@@ -267,18 +266,18 @@ def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_condit
     mc_mvaID   = 1 - (2/(1+np.exp( 2*mc_mvaID )))
 
     # now, we create and fill the histograms with the mvaID distributions
-    mc_mva      = hist.Hist(hist.axis.Regular(60, -0.9, 1.0))
-    nl_mva      = hist.Hist(hist.axis.Regular(60, -0.9, 1.0))
-    data_mva    = hist.Hist(hist.axis.Regular(60, -0.9, 1.0))
+    mc_mva      = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
+    nl_mva      = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
+    data_mva    = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
 
     mc_mva.fill( mc_mvaID, weight = (1e6)*mc_weights )
     nl_mva.fill( nl_mvaID, weight = (1e6)*mc_weights )
     data_mva.fill( data_mvaID, weight = (1e6)*data_weights  )
 
-    plott( data_mva , mc_mva, nl_mva , 'plots/results/mvaID_barrel.png', xlabel = "Barrel mvaID"  )
+    plott( data_mva , mc_mva, nl_mva , plot_path + '/mvaID_barrel.png', xlabel = "Barrel mvaID"  )
 
 
-def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights):
+def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights, plot_path):
     
     model_path = './run3_mvaID_models/'
 
@@ -321,12 +320,68 @@ def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data
     mc_mvaID   = 1 - (2/(1+np.exp( 2*mc_mvaID )))
 
     # now, we create and fill the histograms with the mvaID distributions
-    mc_mva      = hist.Hist(hist.axis.Regular(60, -0.9, 1.0))
-    nl_mva      = hist.Hist(hist.axis.Regular(60, -0.9, 1.0))
-    data_mva    = hist.Hist(hist.axis.Regular(60, -0.9, 1.0))
+    mc_mva      = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
+    nl_mva      = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
+    data_mva    = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
 
-    mc_mva.fill( mc_mvaID, weight = (1e6)*mc_weights )
-    nl_mva.fill( nl_mvaID, weight = (1e6)*mc_weights )
+    mc_mva.fill( mc_mvaID, weight     = (1e6)*mc_weights )
+    nl_mva.fill( nl_mvaID, weight     = (1e6)*mc_weights )
     data_mva.fill( data_mvaID, weight = (1e6)*data_weights  )
 
-    plott( data_mva , mc_mva, nl_mva , 'plots/results/mvaID_endcap.png', xlabel = "End cap mvaID"  )
+    plott( data_mva , mc_mva, nl_mva , plot_path + '/mvaID_endcap.png', xlabel = "End cap mvaID"  )
+
+def plot_distributions_after_transformations(training_inputs, training_conditions, training_weights):
+
+    # Names of the used variables, I copied it here only so it is easier to use it acess the labels and names of teh distirbutions
+    var_list = ["probe_energyRaw",
+                "probe_r9", 
+                "probe_sieie",
+                "probe_etaWidth",
+                "probe_phiWidth",
+                "probe_sieip",
+                "probe_s4",
+                "probe_hoe",
+                "probe_ecalPFClusterIso",
+                "probe_trkSumPtHollowConeDR03",
+                "probe_trkSumPtSolidConeDR04",
+                "probe_pfChargedIso",
+                "probe_pfChargedIsoWorstVtx",
+                "probe_esEffSigmaRR",
+                "probe_esEnergyOverRawE",
+                "probe_hcalPFClusterIso",
+                "probe_energyErr"]
+
+    # two masks to separate events betwenn mc and data
+    data_mask = training_conditions[:,-1] == 1
+    mc_mask   = training_conditions[:,-1] == 0
+
+    # now we plot the distributions
+    for i in range( np.shape( training_inputs[data_mask] )[1] ):
+
+                mean = np.mean( np.array(training_inputs[data_mask][:,i]) )
+                std  = np.std(  np.array(training_inputs[data_mask][:,i]) )
+
+
+                data_hist            = hist.Hist(hist.axis.Regular(70, mean - 3.0*std, mean + 3.0*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(70, mean - 3.0*std, mean + 3.0*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(70, mean - 3.0*std, mean + 3.0*std))
+
+                data_hist.fill( np.array(training_inputs[data_mask][:,i]   )  )
+                mc_hist.fill(  np.array( training_inputs[mc_mask][:,i]),  weight = 1e6*training_weights[mc_mask] )
+                #mc_rw_hist.fill( np.array( flow_samples[:,i]) , weight = 1e6*mc_weights )
+
+                plott( data_hist , mc_hist, mc_hist , 'plots/validation_plots/transformation/after_transform_' +  str(var_list[i]) +".png", xlabel = str(var_list[i])  )
+
+
+# Down here are some ploting functions I still need to implement!
+def plot_correlation_matrix_diference_barrel():
+    pass
+
+def plot_correlation_matrix_diference_endcap():
+    pass
+
+def plot_mvaID_profile_barrel():
+    pass
+
+def plot_mvaID_profile_endcap():
+    pass
