@@ -18,6 +18,11 @@ After correcting all variables used as input to the mvaID BDT, we can reevaluate
 
 <img src="./plot/mvaID_barrel.png" width="50%">
 
+<div style="display: flex; justify-content: space-between;">
+  <img src="./plot/mvaID_barrel.png" width="48%">
+  <img src="./plot/another_image.png" width="48%">
+</div>
+
 ## Usage
 
 To run the tests one need to have the set the configurations of the flow in the flow_configuration.yaml and after run the main.py script.
