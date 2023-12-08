@@ -10,17 +10,13 @@ This project aims to use normalizing flows to correct the simulation distirbutio
 
 The images below shows preliminary results where the blue histogram is the nominal simulated distributions, the red are the corrected samples using normalizng flows and black dots are data.
 
-HoverE is a example of distirbution not well modeled and that needs to be corrected.
+HoverE is a example of distirbution not well modeled and that needs to be corrected. After correcting all variables used as input to the mvaID BDT, we can reevaluate it, and check that the flow corrected values achieve a better closure than the nominal simulation. Just to be clear, the corrections are performed all at once, since it is a multivariate distributions, with non trivial correlations between the variables.
 
-<img src="./plot/probe_hoe.png" width="50%">
 
-After correcting all variables used as input to the mvaID BDT, we can reevaluate it, and check that the flow corrected values achieve a better closure than the nominal simulation.
-
-<img src="./plot/mvaID_barrel.png" width="50%">
 
 <div style="display: flex; justify-content: space-between;">
+  <img src="./plot/probe_hoe.png" width="48%">
   <img src="./plot/mvaID_barrel.png" width="48%">
-  <img src="./plot/another_image.png" width="48%">
 </div>
 
 ## Usage
