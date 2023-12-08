@@ -9,6 +9,42 @@ plt.style.use([mplhep.style.CMS])
 import mplhep as hep
 import xgboost
 
+# Names of the used variables, I copied it here only so it is easier to use it acess the labels and names of teh distirbutions
+var_list = ["probe_energyRaw",
+            "probe_r9", 
+            "probe_sieie",
+            "probe_etaWidth",
+            "probe_phiWidth",
+            "probe_sieip",
+            "probe_s4",
+            "probe_hoe",
+            "probe_ecalPFClusterIso",
+            "probe_trkSumPtHollowConeDR03",
+            "probe_trkSumPtSolidConeDR04",
+            "probe_pfChargedIso",
+            "probe_pfChargedIsoWorstVtx",
+            "probe_esEffSigmaRR",
+            "probe_esEnergyOverRawE",
+            "probe_hcalPFClusterIso",
+            "probe_energyErr"]
+
+# some variables have value of zero in barrel, so we must exclude them. I created this matrix so it is easier to do that!
+var_list_matrix_barrel = ["probe_energyRaw",
+            "probe_r9", 
+            "probe_sieie",
+            "probe_etaWidth",
+            "probe_phiWidth",
+            "probe_sieip",
+            "probe_s4",
+            "probe_hoe",
+            "probe_ecalPFClusterIso",
+            "probe_trkSumPtHollowConeDR03",
+            "probe_trkSumPtSolidConeDR04",
+            "probe_pfChargedIso",
+            "probe_pfChargedIsoWorstVtx",
+            "probe_energyErr"]
+
+
 # this is the main plotting function, all the other will basically set up something to call this one in the end!
 def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
 
@@ -173,26 +209,6 @@ def plot_distributions( path, data_df, mc_df, mc_weights, variables_to_plot ):
 
 def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_weights, plot_path ):
 
-    # We want to correct the variables that are used as input to run3 photon MVA ID
-    var_list = ["probe_energyRaw",
-                "probe_r9", 
-                "probe_sieie",
-                "probe_etaWidth",
-                "probe_phiWidth",
-                "probe_sieip",
-                "probe_s4",
-                "probe_hoe",
-                "probe_ecalPFClusterIso",
-                "probe_trkSumPtHollowConeDR03",
-                "probe_trkSumPtSolidConeDR04",
-                "probe_pfChargedIso",
-                "probe_pfChargedIsoWorstVtx",
-                "probe_esEffSigmaRR",
-                "probe_esEnergyOverRawE",
-                "probe_hcalPFClusterIso",
-                "probe_energyErr"]
-
-
     for i in range( np.shape( data_tensor )[1] ):
 
             mean = np.mean( np.array(data_tensor[:,i]) )
@@ -332,25 +348,6 @@ def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data
 
 def plot_distributions_after_transformations(training_inputs, training_conditions, training_weights):
 
-    # Names of the used variables, I copied it here only so it is easier to use it acess the labels and names of teh distirbutions
-    var_list = ["probe_energyRaw",
-                "probe_r9", 
-                "probe_sieie",
-                "probe_etaWidth",
-                "probe_phiWidth",
-                "probe_sieip",
-                "probe_s4",
-                "probe_hoe",
-                "probe_ecalPFClusterIso",
-                "probe_trkSumPtHollowConeDR03",
-                "probe_trkSumPtSolidConeDR04",
-                "probe_pfChargedIso",
-                "probe_pfChargedIsoWorstVtx",
-                "probe_esEffSigmaRR",
-                "probe_esEnergyOverRawE",
-                "probe_hcalPFClusterIso",
-                "probe_energyErr"]
-
     # two masks to separate events betwenn mc and data
     data_mask = training_conditions[:,-1] == 1
     mc_mask   = training_conditions[:,-1] == 0
@@ -374,8 +371,100 @@ def plot_distributions_after_transformations(training_inputs, training_condition
 
 
 # Down here are some ploting functions I still need to implement!
-def plot_correlation_matrix_diference_barrel():
-    pass
+def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,mc , mc_conditions,mc_weights,mc_corrected,path):
+
+    # lets do this for barrel only for now ...
+    mask_mc,mask_data = np.abs(mc_conditions[:,1]) < 1.4222, np.abs(data_conditions[:,1]) < 1.4222
+
+    # apply the barrel only condition
+    data, mc, mc_corrected              = data[mask_data]            , mc[mask_mc]             ,mc_corrected[mask_mc]
+    data_conditions,mc_conditions      = data_conditions[mask_data] , mc_conditions[mask_mc]
+    data_weights,mc_weights            = data_weights[mask_data]    , mc_weights[mask_mc]
+
+    energy_err_data = data[:,-1:]
+    energy_err_mc = mc[:,-1:]
+    energy_err_mc_corrected = mc_corrected[:,-1:]
+
+    mc           = mc[:,: int( data.size()[1]  -4 ) ]
+    mc_corrected = mc_corrected[:,: int( data.size()[1]  -4 ) ]
+    data         = data[:,: int( data.size()[1]  -4 ) ]
+
+    data = torch.cat( [  data, energy_err_data .view(-1,1)  ], axis = 1 )
+    mc = torch.cat( [  mc, energy_err_mc .view(-1,1)  ], axis = 1 )
+    mc_corrected = torch.cat( [  mc_corrected, energy_err_mc_corrected .view(-1,1)  ], axis = 1 )
+
+    # Some weights can of course be negative, so I had to use the abs here, since it does not accept negative weights ...
+    data_corr         = torch.cov( data.T         , aweights = torch.Tensor( abs(data_weights) ))
+    mc_corr           = torch.cov( mc.T           , aweights = torch.Tensor( abs(mc_weights)   ))
+    mc_corrected_corr = torch.cov( mc_corrected.T , aweights = torch.Tensor( abs(mc_weights)   ))
+
+    #from covariance to correlation matrices
+    data_corr         = torch.inverse( torch.sqrt( torch.diag_embed( torch.diag(data_corr))) ) @ data_corr @  torch.inverse( torch.sqrt(torch.diag_embed(torch.diag(data_corr))) ) 
+    mc_corr           = torch.inverse( torch.sqrt( torch.diag_embed(torch.diag(mc_corr)) )) @ mc_corr @  torch.inverse( torch.sqrt(torch.diag_embed(torch.diag(mc_corr))) ) 
+    mc_corrected_corr = torch.inverse( torch.diag_embed(torch.sqrt(torch.diag(mc_corrected_corr)) )) @ mc_corrected_corr @  torch.inverse( torch.sqrt(torch.diag_embed(torch.diag(mc_corrected_corr))) ) 
+    # end of matrix evaluations, now the plotting part!
+
+    #plloting part
+    fig, ax = plt.subplots(figsize=(33,33))
+    ax.matshow( 100*( data_corr - mc_corrected_corr ), cmap = 'bwr', vmin=-5, vmax=5)
+
+    #ploting the cov matrix values
+    mean,count = 0,0
+    for (i, j), z in np.ndenumerate( 100*( data_corr - mc_corrected_corr )):
+        mean = mean + abs(z)
+        count = count + 1
+        if( abs(z) < 1  ):
+            pass
+        else:
+            ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 60)    
+    
+    mean = mean/count
+    ax.set_xlabel(r'(Corr_MC$^{Corrected}$-Corr_data)  - Metric: ' + str(mean), loc = 'center' ,fontsize = 70)
+    #plt.tight_layout()
+    plt.title( mean )
+
+    #adding axis labels
+    #ax.set_xticklabels(['']+var_names)
+    #ax.set_yticklabels(['']+var_names)
+    
+    ax.set_xticks(np.arange(len(var_list_matrix_barrel)))
+    ax.set_yticks(np.arange(len(var_list_matrix_barrel)))
+    
+    ax.set_xticklabels(var_list_matrix_barrel,fontsize = 45 ,rotation=90)
+    ax.set_yticklabels(var_list_matrix_barrel,fontsize = 45 ,rotation=0)
+
+
+    plt.savefig(path + '/correlation_matrix_corrected_barrel.png')
+
+    
+
+    plt.close()
+    fig, ax = plt.subplots(figsize=(33,33))
+    ax.matshow( 100*( data_corr - mc_corr ), cmap = 'bwr', vmin=-5, vmax=5)
+    #sns.heatmap(data_corr, annot=True, cmap='coolwarm', fmt='.2f', square=True)
+    #plt.title(f'Correlation Matrix for {key}')    
+    
+    #ploting the cov matrix values
+    mean,count = 0,0
+    for (i, j), z in np.ndenumerate(100*( data_corr - mc_corr )):
+        mean = mean + abs(z)
+        count = count + 1
+        if( abs(z) < 1  ):
+            pass
+        else:
+            ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 60)  
+    mean = mean/count   
+
+    ax.set_xticks(np.arange(len(var_list_matrix_barrel)))
+    ax.set_yticks(np.arange(len(var_list_matrix_barrel)))
+    
+    ax.set_xticklabels(var_list_matrix_barrel,fontsize = 45,rotation=90)
+    ax.set_yticklabels(var_list_matrix_barrel,fontsize = 45,rotation=0)
+
+    ax.set_xlabel(r'(Corr_MC-Corr_data  - Metric: ' + str(mean), loc = 'center' ,fontsize = 70)
+
+    plt.savefig(path + '/correlation_matrix_barrel.png')
+
 
 def plot_correlation_matrix_diference_endcap():
     pass

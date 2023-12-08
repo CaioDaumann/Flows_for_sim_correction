@@ -9,7 +9,7 @@ error          = flow_NSF_Iso_High_Stats.err
 
 output = flow.out$(Process)
 
-transfer_input_files = main.py,flo_configuration.yaml
+transfer_input_files = main.py,flow_configuration.yaml
 
 request_cpus   = 4
 request_memory = 50000

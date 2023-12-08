@@ -1,0 +1,4 @@
+name: flows_corrections
+channels:
+  - defaults
+prefix: /home/home1/institut_3a/daumann/.conda/envs/flows_corrections

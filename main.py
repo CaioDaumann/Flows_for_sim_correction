@@ -21,7 +21,7 @@ def main():
     # Lets call the function responsible for reading and treat the data
     # this function reads both mc and data, perform a basic selection and reweight the 4d-kinematics distirbutions
     # in the end they are saved into the a folder, so one doesnt need to go through this function all the time
-    re_process_data = False
+    re_process_data = True
     if( re_process_data ):
         data_reader.read_zee_data()
 

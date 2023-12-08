@@ -187,6 +187,9 @@ class Simulation_correction():
             # I guess I should use the mc_validaiton tensor instead of this -> self.validation_inputs
             plot_utils.plot_distributions_for_tensors( np.array(self.data_test_inputs) , np.array(self.mc_test_inputs), np.array(self.samples), np.array(self.mc_test_weights.to('cpu')), self.dump_folder )
 
+            # Plotting the correlation matrices to better understand how the flows treats the correlations
+            plot_utils.plot_correlation_matrix_diference_barrel(self.data_test_inputs.cpu(), self.data_test_conditions.cpu(), self.data_test_weights.cpu(),  self.mc_test_inputs.cpu(), self.mc_test_conditions.cpu(), self.mc_test_weights.cpu() , self.samples.cpu(),  self.dump_folder)
+
             # Now we evaluate the run3 mvaID and check how well the distributions agree
             #(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights,path_plot)
             plot_utils.plot_mvaID_curve(np.array(self.mc_test_inputs),np.array(self.data_test_inputs),np.array(self.samples),np.array(self.mc_test_conditions.to('cpu')), np.array(self.data_test_conditions.to('cpu')),  np.array(self.mc_test_weights.to('cpu')), np.array(self.data_test_weights), self.dump_folder)

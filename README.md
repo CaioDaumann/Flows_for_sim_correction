@@ -1,6 +1,6 @@
 # Simulation corrections with Normalizing Flows
 
-Repository dedicated to correcting simulation inaccuracies with neural spline auto-regressive flows.
+Repository dedicated to correcting simulation inaccuracies with neural spline auto-regressive flows. The code was developed using pytorch and the zuko normalizing flows library.
 
 We utilize the monotonically increasing transformation characteristic of normalizing flows, ensuring that the quantiles in the target and latent spaces are preserved. This enables us to morph the quantiles of simulated and data distributions, thus performing the necessary corrections.
 
@@ -24,4 +24,27 @@ HoverE is a example of distirbution not well modeled and that needs to be correc
 To run the tests one need to have the set the configurations of the flow in the flow_configuration.yaml and after run the main.py script.
 
 The code is not fully finished, so one may need to set one or two paths.
+
+## Condor submission
+
+These files are set up to run at the RWTH Aachen condor infrastructure. The scripts specifically asks for a gpu machine in our cluster, but that can be easily changed in the flow.sub script.
+
+```python
+condor_submit flow.sub
+```
+
+Should take care of the condor submission! You can also easily specify the resources like memory, gpu and cpu in the flow.sub.
+
+## Conda enviroment
+
+To activate the conda enviroment one just needs to:
+
+```python
+conda activate flow_corrections
+```
+
+```python
+conda env create -f environment.yml --name flow_corrections
+```
+
 
