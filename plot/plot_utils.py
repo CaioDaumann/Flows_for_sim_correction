@@ -44,6 +44,12 @@ var_list_matrix_barrel = ["probe_energyRaw",
             "probe_pfChargedIsoWorstVtx",
             "probe_energyErr"]
 
+# The next three functions are related to the plotting of the profiles of the MVA as a function of the kinematical variables
+# This function calculate the means of the input quantiles! - Weighted mean, of couse.
+def weighted_quantiles_interpolate(values, weights, quantiles=0.5):
+    i = np.argsort(values)
+    c = np.cumsum(weights[i])
+    return values[i[np.searchsorted(c, np.array(quantiles) * c[-1])]]
 
 # this is the main plotting function, all the other will basically set up something to call this one in the end!
 def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
@@ -157,7 +163,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
             ax[0].text(0.05, 0.68, r"$p_\mathrm{T}(Z)$: " + region.split("_ZpT_")[1].replace("_", "-") + "$\,$GeV", fontsize=22, transform=ax[0].transAxes)
     ax[0].tick_params(labelsize=24)
     #ax.set_ylim(0., 1.1*ax.get_ylim()[1])
-    ax[1].set_ylim(0.5, 1.5)
+    ax[1].set_ylim(0.6, 1.4)
     if( 'mva' in xlabel ):
         ax[1].set_ylim(0.75, 1.25)
 
@@ -223,6 +229,11 @@ def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_wei
                 mc_hist              = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
                 mc_rw_hist           = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
 
+            if( 'DR04' in str(var_list[i])  ):
+                data_hist            = hist.Hist(hist.axis.Regular(70, 0.0 , 5.0))
+                mc_hist              = hist.Hist(hist.axis.Regular(70, 0.0 , 5.0))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(70, 0.0 , 5.0))
+
             data_hist.fill( np.array(data_tensor[:,i]   )  )
             mc_hist.fill(  np.array( mc_tensor[:,i]),  weight = 1e6*mc_weights )
             mc_rw_hist.fill( np.array( flow_samples[:,i]) , weight = 1e6*mc_weights )
@@ -281,6 +292,8 @@ def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_condit
     nl_mvaID   = 1 - (2/(1+np.exp( 2*nl_mvaID )))
     mc_mvaID   = 1 - (2/(1+np.exp( 2*mc_mvaID )))
 
+    plot_profile_barrel( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
+
     # now, we create and fill the histograms with the mvaID distributions
     mc_mva      = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
     nl_mva      = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
@@ -334,6 +347,8 @@ def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data
     data_mvaID = 1 - (2/(1+np.exp( 2*data_mvaID )))
     nl_mvaID   = 1 - (2/(1+np.exp( 2*nl_mvaID )))
     mc_mvaID   = 1 - (2/(1+np.exp( 2*mc_mvaID )))
+
+    plot_profile_endcap( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
 
     # now, we create and fill the histograms with the mvaID distributions
     mc_mva      = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
@@ -422,11 +437,9 @@ def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,
     ax.set_xlabel(r'(Corr_MC$^{Corrected}$-Corr_data)  - Metric: ' + str(mean), loc = 'center' ,fontsize = 70)
     #plt.tight_layout()
     plt.title( mean )
-
-    #adding axis labels
-    #ax.set_xticklabels(['']+var_names)
-    #ax.set_yticklabels(['']+var_names)
     
+    #var_list_matrix_barrel=var_list_matrix_barrel.replace('probe_', '')
+
     ax.set_xticks(np.arange(len(var_list_matrix_barrel)))
     ax.set_yticks(np.arange(len(var_list_matrix_barrel)))
     
@@ -435,14 +448,10 @@ def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,
 
 
     plt.savefig(path + '/correlation_matrix_corrected_barrel.png')
-
-    
-
     plt.close()
+
     fig, ax = plt.subplots(figsize=(33,33))
-    ax.matshow( 100*( data_corr - mc_corr ), cmap = 'bwr', vmin=-5, vmax=5)
-    #sns.heatmap(data_corr, annot=True, cmap='coolwarm', fmt='.2f', square=True)
-    #plt.title(f'Correlation Matrix for {key}')    
+    ax.matshow( 100*( data_corr - mc_corr ), cmap = 'bwr', vmin=-5, vmax=5)   
     
     #ploting the cov matrix values
     mean,count = 0,0
@@ -466,11 +475,297 @@ def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,
     plt.savefig(path + '/correlation_matrix_barrel.png')
 
 
-def plot_correlation_matrix_diference_endcap():
-    pass
+def plot_correlation_matrix_diference_endcap(data, data_conditions,data_weights,mc , mc_conditions,mc_weights,mc_corrected,path):
 
-def plot_mvaID_profile_barrel():
-    pass
+    # Selecting only end-cap events
+    mask_mc,mask_data = np.abs(mc_conditions[:,1]) > 1.56, np.abs(data_conditions[:,1]) > 1.56
 
-def plot_mvaID_profile_endcap():
-    pass
+    # apply the barrel only condition
+    data, mc, mc_corrected              = data[mask_data]            , mc[mask_mc]             ,mc_corrected[mask_mc]
+    data_conditions,mc_conditions      = data_conditions[mask_data] , mc_conditions[mask_mc]
+    data_weights,mc_weights            = data_weights[mask_data]    , mc_weights[mask_mc]
+    
+    # Some weights can of course be negative, so I had to use the abs here, since it does not accept negative weights ...
+    data_corr         = torch.cov( data.T         , aweights = torch.Tensor( abs(data_weights) ))
+    mc_corr           = torch.cov( mc.T           , aweights = torch.Tensor( abs(mc_weights)   ))
+    mc_corrected_corr = torch.cov( mc_corrected.T , aweights = torch.Tensor( abs(mc_weights)   ))
+
+    #from covariance to correlation matrices
+    data_corr         = torch.inverse( torch.sqrt( torch.diag_embed( torch.diag(data_corr))) ) @ data_corr @  torch.inverse( torch.sqrt(torch.diag_embed(torch.diag(data_corr))) ) 
+    mc_corr           = torch.inverse( torch.sqrt( torch.diag_embed(torch.diag(mc_corr)) )) @ mc_corr @  torch.inverse( torch.sqrt(torch.diag_embed(torch.diag(mc_corr))) ) 
+    mc_corrected_corr = torch.inverse( torch.diag_embed(torch.sqrt(torch.diag(mc_corrected_corr)) )) @ mc_corrected_corr @  torch.inverse( torch.sqrt(torch.diag_embed(torch.diag(mc_corrected_corr))) ) 
+    # end of matrix evaluations, now the plotting part!
+
+    #plloting part
+    fig, ax = plt.subplots(figsize=(33,33))
+    ax.matshow( 100*( data_corr - mc_corrected_corr ), cmap = 'bwr', vmin=-5, vmax=5)
+
+    #ploting the cov matrix values
+    mean,count = 0,0
+    for (i, j), z in np.ndenumerate( 100*( data_corr - mc_corrected_corr )):
+        mean = mean + abs(z)
+        count = count + 1
+        if( abs(z) < 1  ):
+            pass
+        else:
+            ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 60)    
+    
+    mean = mean/count
+    ax.set_xlabel(r'(Corr_MC$^{Corrected}$-Corr_data)  - Metric: ' + str(mean), loc = 'center' ,fontsize = 70)
+    #plt.tight_layout()
+    plt.title( mean )
+
+    #adding axis labels
+    #ax.set_xticklabels(['']+var_names)
+    #ax.set_yticklabels(['']+var_names)
+    
+    ax.set_xticks(np.arange(len(var_list)))
+    ax.set_yticks(np.arange(len(var_list)))
+    
+    ax.set_xticklabels(var_list,fontsize = 45 ,rotation=90)
+    ax.set_yticklabels(var_list,fontsize = 45 ,rotation=0)
+
+
+    plt.savefig(path + '/correlation_matrix_corrected_endcap.png')
+
+    
+
+    plt.close()
+    fig, ax = plt.subplots(figsize=(33,33))
+    ax.matshow( 100*( data_corr - mc_corr ), cmap = 'bwr', vmin=-5, vmax=5)
+    #sns.heatmap(data_corr, annot=True, cmap='coolwarm', fmt='.2f', square=True)
+    #plt.title(f'Correlation Matrix for {key}')    
+    
+    #ploting the cov matrix values
+    mean,count = 0,0
+    for (i, j), z in np.ndenumerate(100*( data_corr - mc_corr )):
+        mean = mean + abs(z)
+        count = count + 1
+        if( abs(z) < 1  ):
+            pass
+        else:
+            ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 60)  
+    mean = mean/count   
+
+    ax.set_xticks(np.arange(len(var_list)))
+    ax.set_yticks(np.arange(len(var_list)))
+    
+    ax.set_xticklabels(var_list,fontsize = 45,rotation=90)
+    ax.set_yticklabels(var_list,fontsize = 45,rotation=0)
+
+    ax.set_xlabel(r'(Corr_MC-Corr_data  - Metric: ' + str(mean), loc = 'center' ,fontsize = 70)
+
+    plt.savefig(path + '/correlation_matrix_endcap.png')
+
+
+#The events are binned in bins of equal number of events of each profilling variable, than the median is calculated!
+def plot_profile_barrel( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data_conditions, mc_weights, data_weights,path):
+
+    # Barrel only mask!
+    mask_mc   = np.abs( mc_conditions[:,1])   < 1.442
+    mask_data = np.abs( data_conditions[:,1]) < 1.442 
+
+    nl_mva_ID = nl_mva_ID[mask_mc]
+    mc_mva_id = mc_mva_id[mask_mc]
+    mc_weights = mc_weights[mask_mc]
+    mc_conditions = mc_conditions[mask_mc]
+
+    data_mva_id     = data_mva_id[mask_data]
+    data_conditions = data_conditions[mask_data]
+    data_weights    = data_weights[mask_data]
+
+    #lets call the function ...
+    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,0],data_mva_id,data_conditions[:,0],mc_weights,data_weights , path, var = 'pt' )
+    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,1],data_mva_id,data_conditions[:,1],mc_weights,data_weights , path, var = 'eta' )
+    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,2],data_mva_id,data_conditions[:,2],mc_weights,data_weights , path ,var = 'phi' )
+    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,3],data_mva_id,data_conditions[:,3],mc_weights,data_weights , path ,var = 'rho' )
+
+
+
+#The events are binned in bins of equal number of events of each profilling variable, than the median is calculated!
+def plot_profile_endcap( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data_conditions, mc_weights, data_weights,path):
+
+    # Barrel only mask!
+    mask_mc   = np.abs( mc_conditions[:,1])   > 1.56
+    mask_data = np.abs( data_conditions[:,1]) > 1.56 
+
+    nl_mva_ID = nl_mva_ID[mask_mc]
+    mc_mva_id = mc_mva_id[mask_mc]
+    mc_weights = mc_weights[mask_mc]
+    mc_conditions = mc_conditions[mask_mc]
+
+    data_mva_id     = data_mva_id[mask_data]
+    data_conditions = data_conditions[mask_data]
+    data_weights    = data_weights[mask_data]
+
+    #lets call the function ...
+    plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,mc_conditions[:,0],data_mva_id,data_conditions[:,0],mc_weights,data_weights , path, var = 'pt' )
+    plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,mc_conditions[:,1],data_mva_id,data_conditions[:,1],mc_weights,data_weights , path, var = 'eta' )
+    plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,mc_conditions[:,2],data_mva_id,data_conditions[:,2],mc_weights,data_weights , path ,var = 'phi' )
+    plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,mc_conditions[:,3],data_mva_id,data_conditions[:,3],mc_weights,data_weights , path ,var = 'rho' )
+
+
+
+# Lets do this separatly, first, we do the plots at the barrel only!
+def plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,var_mc,data_mva_id,var_data,mc_weights,data_weights,path,var = 'pt' ):
+    
+    if 'pt' in var:
+        bins = np.linspace( 25.0, 80.0, 20 )
+    elif 'phi' in var:
+        bins = np.linspace( -3.1415, 3.1415, 20)
+    elif 'eta' in var:
+        bins = np.linspace( -1.442, 1.442, 20 )
+    elif 'rho' in var:
+        bins = np.linspace( 5.0, 50.0, 20 )
+
+    #arrays to store the 
+    position, nl_mean, data_mean, mc_mean = [],[],[],[]
+    nl_mean_q25, data_mean_q25, mc_mean_q25 = [],[],[]
+    nl_mean_q75, data_mean_q75, mc_mean_q75 = [],[],[]
+
+    for i in range( 0, int(len( bins ) -1) ):
+
+        mva_nl_window     = nl_mva_ID[   ( var_mc  > bins[i]) &   ( var_mc < bins[i+1])   ]
+        mva_mc_window     = mc_mva_id[   ( var_mc  > bins[i]) &   ( var_mc < bins[i+1])   ]
+        mc_weights_window = mc_weights[  ( var_mc  > bins[i]) &   ( var_mc < bins[i+1])  ]
+
+        mva_data_window     = data_mva_id[ ( var_data  > bins[i]) & ( var_data < bins[i+1])  ] 
+        data_weights_window = data_weights[ ( var_data  > bins[i]) & ( var_data < bins[i+1])  ] 
+
+        position.append(  bins[i] + (bins[i+1] -bins[i] )/2.   )
+        nl_mean.append(   weighted_quantiles_interpolate( mva_nl_window      , mc_weights_window )   )   #np.median(  mva_nl_window )   )
+        mc_mean.append(   weighted_quantiles_interpolate( mva_mc_window      , mc_weights_window )   )
+        data_mean.append( weighted_quantiles_interpolate( mva_data_window    , data_weights_window ) )
+
+        nl_mean_q25.append(   weighted_quantiles_interpolate( mva_nl_window  , mc_weights_window     , quantiles= 0.25  ) )   #np.median(  mva_nl_window )   )
+        mc_mean_q25.append(   weighted_quantiles_interpolate( mva_mc_window  , mc_weights_window     , quantiles= 0.25  ) )
+        data_mean_q25.append( weighted_quantiles_interpolate( mva_data_window, data_weights_window   , quantiles= 0.25  ) )
+
+        nl_mean_q75.append(   weighted_quantiles_interpolate( mva_nl_window  , mc_weights_window     , quantiles = 0.75 ) )   #np.median(  mva_nl_window )   )
+        mc_mean_q75.append(   weighted_quantiles_interpolate( mva_mc_window  , mc_weights_window     , quantiles = 0.75 ) )
+        data_mean_q75.append( weighted_quantiles_interpolate( mva_data_window, data_weights_window   , quantiles = 0.75 ) )
+
+    # Plotting the 3 quantiles
+    plt.figure(figsize=(10, 6))
+    plt.plot( position , nl_mean ,  linewidth  = 2 , color = 'red' , label = 'MC corrected' )
+    plt.plot( position , mc_mean ,  linewidth  = 2 , color = 'blue'  , label = 'MC nominal'   )
+    plt.plot( position , data_mean , linewidth = 2 , color = 'green', label = 'Data'  )
+
+
+    plt.plot( position , nl_mean_q25 ,  linewidth  = 2 , linestyle='dashed', color = 'red'  )
+    plt.plot( position , mc_mean_q25 ,  linewidth  = 2 , linestyle='dashed',color = 'blue'    )
+    plt.plot( position , data_mean_q25 , linewidth = 2 , linestyle='dashed', color = 'green' )
+
+    plt.plot( position , nl_mean_q75 ,  linewidth  = 2 , linestyle='dashed', color = 'red'  )
+    plt.plot( position , mc_mean_q75 ,  linewidth  = 2 , linestyle='dashed',color = 'blue'    )
+    plt.plot( position , data_mean_q75 , linewidth = 2 , linestyle='dashed', color = 'green' )
+
+
+    if 'eta' in var:
+        plt.xlabel( r'$\eta$' , fontsize = 25 )
+    if 'phi' in var:
+        plt.xlabel( r'$\phi$' ,  fontsize = 25)
+    if 'rho' in var:
+        plt.xlabel( r'$\rho$' ,  fontsize = 25 )
+    if 'pt' in var:
+        plt.xlabel( r'$p_{T}$ [GeV]', fontsize = 25 )
+
+    plt.ylabel( 'Photon MVA ID' )
+    plt.legend(fontsize=15)
+
+    plt.ylim( 0.0 , 1.0 )
+
+    if 'eta' in var:
+        plt.ylim( 0.0 , 1.0 )
+    if 'phi' in var:
+        plt.ylim( 0.0 , 1.0 )
+    if 'rho' in var:
+        plt.ylim( 0.0 , 1.0 )
+
+    plt.tight_layout()
+
+    plt.savefig( path + '/profile_' + str(var) +'.png' )
+
+    plt.close()
+
+
+def plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,var_mc,data_mva_id,var_data,mc_weights,data_weights,path,var = 'pt' ):
+    
+    if 'pt' in var:
+        bins = np.linspace( 25.0, 80.0, 20 )
+    elif 'phi' in var:
+        bins = np.linspace( -3.1415, 3.1415, 20)
+    elif 'eta' in var:
+        bins = np.linspace( -1.442, 1.442, 20 )
+    elif 'rho' in var:
+        bins = np.linspace( 5.0, 50.0, 20 )
+
+    #arrays to store the 
+    position, nl_mean, data_mean, mc_mean = [],[],[],[]
+    nl_mean_q25, data_mean_q25, mc_mean_q25 = [],[],[]
+    nl_mean_q75, data_mean_q75, mc_mean_q75 = [],[],[]
+
+    for i in range( 0, int(len( bins ) -1) ):
+
+        mva_nl_window     = nl_mva_ID[   ( var_mc  > bins[i]) &   ( var_mc < bins[i+1])   ]
+        mva_mc_window     = mc_mva_id[   ( var_mc  > bins[i]) &   ( var_mc < bins[i+1])   ]
+        mc_weights_window = mc_weights[  ( var_mc  > bins[i]) &   ( var_mc < bins[i+1])  ]
+
+        mva_data_window     = data_mva_id[ ( var_data  > bins[i]) & ( var_data < bins[i+1])  ] 
+        data_weights_window = data_weights[ ( var_data  > bins[i]) & ( var_data < bins[i+1])  ] 
+
+        position.append(  bins[i] + (bins[i+1] -bins[i] )/2.   )
+        nl_mean.append(   weighted_quantiles_interpolate( mva_nl_window      , mc_weights_window )   )   #np.median(  mva_nl_window )   )
+        mc_mean.append(   weighted_quantiles_interpolate( mva_mc_window      , mc_weights_window )   )
+        data_mean.append( weighted_quantiles_interpolate( mva_data_window    , data_weights_window ) )
+
+        nl_mean_q25.append(   weighted_quantiles_interpolate( mva_nl_window  , mc_weights_window     , quantiles= 0.25  ) )   #np.median(  mva_nl_window )   )
+        mc_mean_q25.append(   weighted_quantiles_interpolate( mva_mc_window  , mc_weights_window     , quantiles= 0.25  ) )
+        data_mean_q25.append( weighted_quantiles_interpolate( mva_data_window, data_weights_window   , quantiles= 0.25  ) )
+
+        nl_mean_q75.append(   weighted_quantiles_interpolate( mva_nl_window  , mc_weights_window     , quantiles = 0.75 ) )   #np.median(  mva_nl_window )   )
+        mc_mean_q75.append(   weighted_quantiles_interpolate( mva_mc_window  , mc_weights_window     , quantiles = 0.75 ) )
+        data_mean_q75.append( weighted_quantiles_interpolate( mva_data_window, data_weights_window   , quantiles = 0.75 ) )
+
+    # Plotting the 3 quantiles
+    plt.figure(figsize=(10, 6))
+    plt.plot( position , nl_mean ,  linewidth  = 2 , color = 'red' , label = 'MC corrected' )
+    plt.plot( position , mc_mean ,  linewidth  = 2 , color = 'blue'  , label = 'MC nominal'   )
+    plt.plot( position , data_mean , linewidth = 2 , color = 'green', label = 'Data'  )
+
+
+    plt.plot( position , nl_mean_q25 ,  linewidth  = 2 , linestyle='dashed', color = 'red'  )
+    plt.plot( position , mc_mean_q25 ,  linewidth  = 2 , linestyle='dashed',color = 'blue'    )
+    plt.plot( position , data_mean_q25 , linewidth = 2 , linestyle='dashed', color = 'green' )
+
+    plt.plot( position , nl_mean_q75 ,  linewidth  = 2 , linestyle='dashed', color = 'red'  )
+    plt.plot( position , mc_mean_q75 ,  linewidth  = 2 , linestyle='dashed',color = 'blue'    )
+    plt.plot( position , data_mean_q75 , linewidth = 2 , linestyle='dashed', color = 'green' )
+
+
+    if 'eta' in var:
+        plt.xlabel( r'$\eta$' , fontsize = 25 )
+    if 'phi' in var:
+        plt.xlabel( r'$\phi$' ,  fontsize = 25)
+    if 'rho' in var:
+        plt.xlabel( r'$\rho$' ,  fontsize = 25 )
+    if 'pt' in var:
+        plt.xlabel( r'$p_{T}$ [GeV]', fontsize = 25 )
+
+    plt.ylabel( 'Photon MVA ID' )
+    plt.legend(fontsize=15)
+
+    plt.ylim( 0.0 , 1.0 )
+
+    if 'eta' in var:
+        plt.ylim( 0.0 , 1.0 )
+    if 'phi' in var:
+        plt.ylim( 0.0 , 1.0 )
+    if 'rho' in var:
+        plt.ylim( 0.0 , 1.0 )
+
+    plt.tight_layout()
+
+    plt.savefig( path + '/profile_endcap_' + str(var) +'.png' )
+
+    plt.close()

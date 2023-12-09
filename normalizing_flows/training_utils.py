@@ -41,7 +41,9 @@ class Simulation_correction():
 
         #reading important tensors
         self.read_saved_tensor()
+        self.remove_energy_raw_from_training()
         self.perform_transformation()
+        
 
         # defining the flow hyperparametrs as menbers of the class
         self.n_transforms   = n_transforms
@@ -83,7 +85,7 @@ class Simulation_correction():
         #defining the parameters of the lr scheduler and early stopper!
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', patience = 10)
         
-        patiente_early = 11
+        patiente_early = 16
         self.early_stopper = EarlyStopper(patience = patiente_early, min_delta=0.000)
 
         # Two arrays arecreated to keep track of the loss during training
@@ -106,7 +108,7 @@ class Simulation_correction():
                 self.optimizer.zero_grad()
 
                 # "Sampling" the batch from the array
-                idxs = torch.randint(low=0, high= self.training_inputs.size()[0], size= (512,))
+                idxs = torch.randint(low=0, high= self.training_inputs.size()[0], size= ( self.batch_size,))
 
                 loss = self.training_weights[idxs]*(-self.flow(self.training_conditions[idxs]).log_prob( self.training_inputs[idxs]))
                 loss = loss.mean()
@@ -184,11 +186,14 @@ class Simulation_correction():
             self.mc_test_inputs          = self.mc_test_inputs.to('cpu')
             self.mc_test_inputs          = self.mc_test_inputs.to('cpu')
 
+            self.stitch_energy_raw_from_training()
+
             # I guess I should use the mc_validaiton tensor instead of this -> self.validation_inputs
             plot_utils.plot_distributions_for_tensors( np.array(self.data_test_inputs) , np.array(self.mc_test_inputs), np.array(self.samples), np.array(self.mc_test_weights.to('cpu')), self.dump_folder )
 
             # Plotting the correlation matrices to better understand how the flows treats the correlations
-            plot_utils.plot_correlation_matrix_diference_barrel(self.data_test_inputs.cpu(), self.data_test_conditions.cpu(), self.data_test_weights.cpu(),  self.mc_test_inputs.cpu(), self.mc_test_conditions.cpu(), self.mc_test_weights.cpu() , self.samples.cpu(),  self.dump_folder)
+            plot_utils.plot_correlation_matrix_diference_barrel(self.data_test_inputs.clone().detach().cpu(), self.data_test_conditions.clone().detach().cpu(), self.data_test_weights.clone().detach().cpu(),  self.mc_test_inputs.clone().detach().cpu(), self.mc_test_conditions.clone().detach().cpu(), self.mc_test_weights.clone().detach().cpu() , self.samples.clone().detach().cpu(),  self.dump_folder)
+            plot_utils.plot_correlation_matrix_diference_endcap(self.data_test_inputs.clone().detach().cpu(), self.data_test_conditions.clone().detach().cpu(), self.data_test_weights.clone().detach().cpu(),  self.mc_test_inputs.clone().detach().cpu(), self.mc_test_conditions.clone().detach().cpu(), self.mc_test_weights.clone().detach().cpu() , self.samples.clone().detach().cpu(),  self.dump_folder)
 
             # Now we evaluate the run3 mvaID and check how well the distributions agree
             #(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights,path_plot)
@@ -204,7 +209,7 @@ class Simulation_correction():
         # Lets now apply the Isolation transformation into the isolation variables
         # This "self.indexes_for_iso_transform" are the indexes of the variables in the inputs= tensors where the isolation variables are stored
         # and thus, where the transformations will be performed
-        self.indexes_for_iso_transform = [7,8,9,10,11,12,13,14,15] #[6,7,8,9,10,11,12,13,14] #this has to be changed once I take the energy raw out of the inputs
+        self.indexes_for_iso_transform = [6,7,8,9,10,11,12,13,14] #[7,8,9,10,11,12,13,14,15] #[6,7,8,9,10,11,12,13,14] #this has to be changed once I take the energy raw out of the inputs
         self.vector_for_iso_constructors_mc   = []
         self.vector_for_iso_constructors_data = []
 
@@ -249,7 +254,7 @@ class Simulation_correction():
 
         # We now perform the standartization of the training and validation arrays
         self.input_mean_for_std = torch.mean( self.training_inputs, 0 )
-        self.input_std_for_std = torch.std( self.training_inputs, 0 )
+        self.input_std_for_std  = torch.std( self.training_inputs, 0 )
         
         # the last element of the condition tensor is a boolean, so of couse we do not transform that xD
         self.condition_mean_for_std = torch.mean( self.training_conditions[:,:-1], 0 )
@@ -298,6 +303,24 @@ class Simulation_correction():
             self.samples[:,index] = self.vector_for_iso_constructors_mc[counter].inverse_shift_and_sample(self.samples[:,index], processed = True)
 
             counter = counter + 1
+
+    # energy raw should not be correct, So i am removing it from the inputs here! it is always the first entry in the tensor
+    def remove_energy_raw_from_training(self):
+
+        self.data_training_inputs = self.data_training_inputs[:,1:]
+        self.mc_training_inputs   = self.mc_training_inputs[:,1:]
+        
+        self.data_validation_inputs = self.data_validation_inputs[:,1:]
+        self.mc_validation_inputs   = self.mc_validation_inputs[:,1:]
+        
+        # but we still need it to reevaluate the mvaID, so I we need to keep it!
+        self.mc_test_inputs_energy_raw = self.mc_test_inputs[:,0]
+        self.mc_test_inputs = self.mc_test_inputs[:,1:]
+
+    def stitch_energy_raw_from_training(self):
+        # re-adding teh energy raw for the mvaID calculation!
+        self.mc_test_inputs = torch.cat( [ self.mc_test_inputs_energy_raw.view(-1,1) , self.mc_test_inputs   ], axis = 1 )
+        self.samples        = torch.cat( [ self.mc_test_inputs_energy_raw.view(-1,1) , self.samples  ], axis = 1 )
 
     # this funcitions is responable for reading the files processed and saved by the read_data.py files
     # The tensors should already be ready for training, just plug and play!
