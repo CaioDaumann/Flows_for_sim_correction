@@ -1,0 +1,11 @@
+# This file holds the configurations train a normalizing flow by the main.py file
+# You can set multiple configurations and the main file will loop trough them and perform diferent trainings
+
+configuration_6:
+    n_transforms   : 10
+    aux_nodes      : 512
+    aux_layers     : 3
+    n_splines_bins : 8
+    initial_lr     : 1.0e-3
+    batch_size     : 1024
+    max_epochs     : -35
