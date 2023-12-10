@@ -29,10 +29,10 @@ jobs:
         pip install flake8 pytest
 
         # Do I need to create the full enviroment =p
-        conda env create -f environment.yml
-        conda activate flow_corrections
+        #conda env create -f environment.yml
+        #conda activate flow_corrections
 
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        if [ -f requirements.yml ]; then pip install -r requirements.yml; fi
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
