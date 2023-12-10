@@ -600,7 +600,7 @@ def plot_profile_endcap( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data
 
     #lets call the function ...
     plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,mc_conditions[:,0],data_mva_id,data_conditions[:,0],mc_weights,data_weights , path, var = 'pt' )
-    plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,mc_conditions[:,1],data_mva_id,data_conditions[:,1],mc_weights,data_weights , path, var = 'eta' )
+    #plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,mc_conditions[:,1],data_mva_id,data_conditions[:,1],mc_weights,data_weights , path, var = 'eta' )
     plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,mc_conditions[:,2],data_mva_id,data_conditions[:,2],mc_weights,data_weights , path ,var = 'phi' )
     plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,mc_conditions[:,3],data_mva_id,data_conditions[:,3],mc_weights,data_weights , path ,var = 'rho' )
 
@@ -696,7 +696,9 @@ def plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,var_mc,data_mva_id,var_data,m
     elif 'phi' in var:
         bins = np.linspace( -3.1415, 3.1415, 20)
     elif 'eta' in var:
-        bins = np.linspace( -1.442, 1.442, 20 )
+        print('ue')
+        bins = np.linspace( [[-2.5,-1.442],  [1.442, 2.5] ], 20 )
+        print(bins)
     elif 'rho' in var:
         bins = np.linspace( 5.0, 50.0, 20 )
 

@@ -15,7 +15,9 @@ permissions:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    # Due to cuda constraings, I needed to set up a self-hosted runner!
+    #runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
     - uses: actions/checkout@v3
