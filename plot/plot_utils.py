@@ -163,9 +163,9 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
             ax[0].text(0.05, 0.68, r"$p_\mathrm{T}(Z)$: " + region.split("_ZpT_")[1].replace("_", "-") + "$\,$GeV", fontsize=22, transform=ax[0].transAxes)
     ax[0].tick_params(labelsize=24)
     #ax.set_ylim(0., 1.1*ax.get_ylim()[1])
-    ax[1].set_ylim(0.6, 1.4)
+    ax[1].set_ylim(0.71, 1.29)
     if( 'mva' in xlabel ):
-        ax[1].set_ylim(0.75, 1.25)
+        ax[1].set_ylim(0.79, 1.21)
 
     ax[0].legend(
         loc="upper right", fontsize=24
@@ -182,7 +182,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
     return 0
 
 # This is a plot distribution suitable for dataframes, if one wants to plot tensors see "plot_distributions_for_tensors()"
-def plot_distributions( path, data_df, mc_df, mc_weights, variables_to_plot ):
+def plot_distributions( path, data_df, mc_df, mc_weights, variables_to_plot, weights_befores_rw = False ):
 
     for set in variables_to_plot:
 
@@ -205,7 +205,11 @@ def plot_distributions( path, data_df, mc_df, mc_weights, variables_to_plot ):
                 mc_rw_hist           = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
 
             data_hist.fill( np.array(data_df[key]   )  )
-            mc_hist.fill( np.array(  mc_df[key]) )
+            
+            if( len(weights_befores_rw)  ):
+                mc_hist.fill( np.array(  mc_df[key]), weight = weights_befores_rw )
+            else:
+                mc_hist.fill( np.array(  mc_df[key]) )
 
             #print( np.shape( np.array(drell_yan_df[key]) ) , np.shape( mc_weights  ) )
 
@@ -220,19 +224,19 @@ def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_wei
             mean = np.mean( np.array(data_tensor[:,i]) )
             std  = np.std(  np.array(data_tensor[:,i]) )
 
-            if( 'Iso' in str(var_list[i]) or 'DR' in str(var_list[i]) or 'esE' in str(var_list[i]) or 'hoe' in str(var_list[i])  ):
-                data_hist            = hist.Hist(hist.axis.Regular(70, 0.0 , mean + 2.0*std))
-                mc_hist              = hist.Hist(hist.axis.Regular(70, 0.0 , mean + 2.0*std))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(70, 0.0 , mean + 2.0*std))
+            if( 'Iso' in str(var_list[i]) or 'DR' in str(var_list[i]) or 'esE' in str(var_list[i]) or 'hoe' in str(var_list[i]) or 'energy' in str(var_list[i])  ):
+                data_hist            = hist.Hist(hist.axis.Regular(45, 0.0 , mean + 2.0*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(45, 0.0 , mean + 2.0*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(45, 0.0 , mean + 2.0*std))
             else:
-                data_hist            = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
-                mc_hist              = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
+                data_hist            = hist.Hist(hist.axis.Regular(45, mean - 2.5*std, mean + 2.5*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(45, mean - 2.5*std, mean + 2.5*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(45, mean - 2.5*std, mean + 2.5*std))
 
             if( 'DR04' in str(var_list[i])  ):
-                data_hist            = hist.Hist(hist.axis.Regular(70, 0.0 , 5.0))
-                mc_hist              = hist.Hist(hist.axis.Regular(70, 0.0 , 5.0))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(70, 0.0 , 5.0))
+                data_hist            = hist.Hist(hist.axis.Regular(50, 0.0 , 5.0))
+                mc_hist              = hist.Hist(hist.axis.Regular(50, 0.0 , 5.0))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(50, 0.0 , 5.0))
 
             data_hist.fill( np.array(data_tensor[:,i]   )  )
             mc_hist.fill(  np.array( mc_tensor[:,i]),  weight = 1e6*mc_weights )
@@ -295,9 +299,9 @@ def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_condit
     plot_profile_barrel( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
 
     # now, we create and fill the histograms with the mvaID distributions
-    mc_mva      = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
-    nl_mva      = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
-    data_mva    = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
+    mc_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
+    nl_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
+    data_mva    = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
 
     mc_mva.fill( mc_mvaID, weight = (1e6)*mc_weights )
     nl_mva.fill( nl_mvaID, weight = (1e6)*mc_weights )
@@ -351,9 +355,9 @@ def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data
     plot_profile_endcap( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
 
     # now, we create and fill the histograms with the mvaID distributions
-    mc_mva      = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
-    nl_mva      = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
-    data_mva    = hist.Hist(hist.axis.Regular(70, -0.9, 1.0))
+    mc_mva      = hist.Hist(hist.axis.Regular(30, -0.9, 1.0))
+    nl_mva      = hist.Hist(hist.axis.Regular(30, -0.9, 1.0))
+    data_mva    = hist.Hist(hist.axis.Regular(30, -0.9, 1.0))
 
     mc_mva.fill( mc_mvaID, weight     = (1e6)*mc_weights )
     nl_mva.fill( nl_mvaID, weight     = (1e6)*mc_weights )

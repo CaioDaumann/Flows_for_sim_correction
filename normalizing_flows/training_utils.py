@@ -217,7 +217,7 @@ class Simulation_correction():
         for index in self.indexes_for_iso_transform:
             
             # since hoe has very low values, the shift value (value until traingular events are sampled) must be diferent here
-            if( index == 7 ):
+            if( index == 6 ):
                 self.vector_for_iso_constructors_data.append( Make_iso_continuous(self.data_training_inputs[:,index], b = 0.001) )
                 self.vector_for_iso_constructors_mc.append( Make_iso_continuous(self.mc_training_inputs[:,index] , b= 0.001) )
             else:
@@ -252,14 +252,22 @@ class Simulation_correction():
         self.validation_conditions = torch.cat([ self.data_validation_conditions, self.mc_validation_conditions], axis = 0).to(self.device).to(self.device)
         self.validation_weights    = torch.tensor(np.concatenate([ self.data_validation_weights, self.mc_validation_weights], axis = 0)).to(self.device)
 
-        # We now perform the standartization of the training and validation arrays
-        self.input_mean_for_std = torch.mean( self.training_inputs, 0 )
-        self.input_std_for_std  = torch.std( self.training_inputs, 0 )
+        # We now perform the standartization of the training and validation arrays - lets use only mc to calculate the means and stuff ...
+        self.input_mean_for_std = torch.mean( self.training_inputs[  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ], 0 )
+        self.input_std_for_std  = torch.std( self.training_inputs[  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ], 0 )
         
         # the last element of the condition tensor is a boolean, so of couse we do not transform that xD
-        self.condition_mean_for_std = torch.mean( self.training_conditions[:,:-1], 0 )
-        self.condition_std_for_std  = torch.std( self.training_conditions[:,:-1], 0 )
+        self.condition_mean_for_std = torch.mean( self.training_conditions[:,:-1][  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ], 0 )
+        self.condition_std_for_std  = torch.std( self.training_conditions[:,:-1][  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ], 0 )
         
+        """
+        print( self.input_mean_for_std )
+        print( self.input_std_for_std )
+        print( self.condition_mean_for_std )
+        print( self.condition_std_for_std )
+        exit()
+        """
+
         # transorming the training tensors
         self.training_inputs = ( self.training_inputs - self.input_mean_for_std  )/self.input_std_for_std
         self.training_conditions[:,:-1] = ( self.training_conditions[:,:-1] - self.condition_mean_for_std )/self.condition_std_for_std

@@ -16,7 +16,7 @@ def perform_zee_selection( data_df, mc_df ):
     # first we need to calculathe the invariant mass of the electron pair
 
     # variables names used to calculate the mass 
-    mass_vars = ["tag_pt","tag_ScEta","tag_phi","probe_pt","probe_ScEta","probe_phi","fixedGridRhoAll"]
+    mass_vars = ["tag_pt","tag_ScEta","tag_phi","probe_pt","probe_ScEta","probe_phi","fixedGridRhoAll", "tag_mvaID"]
 
     mass_inputs_data = np.array( data_df[mass_vars]) 
     mass_inputs_mc   = np.array( mc_df[mass_vars]  )
@@ -27,12 +27,13 @@ def perform_zee_selection( data_df, mc_df ):
 
     # now, in order to perform the needed cuts two masks will be created
     mask_data = np.logical_and( mass_data > 80 , mass_data < 100  )
-    mask_data = np.logical_and( mask_data , mass_inputs_data[:,0] > 40  )
-    mask_data = np.logical_and( mask_data , mass_inputs_data[:,3] > 20  )
-    mask_data = np.logical_and( mask_data , np.abs(mass_inputs_data[:,4]) < 2.5  )
-    mask_data = np.logical_and( mask_data , np.abs(mass_inputs_data[:,5]) < 3.1415  )
+    mask_data = np.logical_and( mask_data , mass_inputs_data[:,0] > 40  ) #tag pt cut
+    mask_data = np.logical_and( mask_data , mass_inputs_data[:,3] > 20  ) #probe pt cut
+    mask_data = np.logical_and( mask_data , np.abs(mass_inputs_data[:,4]) < 2.5  )  # eta cut
+    mask_data = np.logical_and( mask_data , np.abs(mass_inputs_data[:,5]) < 3.1415  ) # phi cut
     mask_data = np.logical_and( mask_data , mass_inputs_data[:,6] < 100  )
     mask_data = np.logical_and( mask_data , mass_inputs_data[:,6] > 0  )
+    mask_data = np.logical_and( mask_data , mass_inputs_data[:,7] > 0.0  )  # tag mvaID cut
     
 
     mask_mc   = np.logical_and( mass_mc > 80 , mass_mc < 100  )
@@ -42,6 +43,7 @@ def perform_zee_selection( data_df, mc_df ):
     mask_mc   = np.logical_and( mask_mc , np.abs(mass_inputs_mc[:,5]) < 3.1415  )
     mask_mc   = np.logical_and( mask_mc , mass_inputs_mc[:,6] > 0  )
     mask_mc   = np.logical_and( mask_mc , mass_inputs_mc[:,6] < 100  )
+    mask_mc   = np.logical_and( mask_mc , mass_inputs_mc[:,7] > 0.0  )
 
     # return the masks for further operations
     return mask_data, mask_mc
@@ -65,7 +67,7 @@ def perform_zee_kinematics_reweighting(data_array, data_weights, mc_array, mc_we
     phi_min, phi_max = -3.15,3.15
 
     # now the number of bins in each distribution
-    pt_bins,rho_bins,eta_bins,phi_bins = 20, 30, 10, 4
+    pt_bins,rho_bins,eta_bins,phi_bins = 10, 30, 10, 2 #was 20, 30, 10, 4
 
     # Now we create a 4d histogram of this kinematic variables
     mc_histo,   edges = np.histogramdd( sample =  (mc_array[:,0] ,   mc_array[:,3],      mc_array[:,1], mc_array[:,2])   , bins = (pt_bins,rho_bins,eta_bins,phi_bins), range = [   [pt_min,pt_max], [ rho_min, rho_max ],[eta_min,eta_max], [phi_min,phi_max]  ], weights = mc_weights )
@@ -129,33 +131,36 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
     assert len( mc_weights )    == len( data_weights )
     assert len( mc_conditions ) == len(data_conditions)
 
+    training_percent = 0.7
+    validation_percent = 0.05 + training_percent
+    testing_percet = 1 - training_percent - validation_percent
 
     # Now, the fun part! - Separating everyhting into trainnig, validation and testing datasets!
-    data_training_inputs     = data_inputs[: int( 0.6*len(data_inputs  )) ] 
-    data_training_conditions = data_conditions[: int( 0.6*len(data_inputs  )) ] 
-    data_training_weights    = data_weights[: int( 0.6*len(data_inputs  )) ] 
+    data_training_inputs     = data_inputs[: int( training_percent*len(data_inputs  )) ] 
+    data_training_conditions = data_conditions[: int( training_percent*len(data_inputs  )) ] 
+    data_training_weights    = data_weights[: int( training_percent*len(data_inputs  )) ] 
 
-    mc_training_inputs     = mc_inputs[: int( 0.6*len(mc_inputs  )) ] 
-    mc_training_conditions = mc_conditions[: int( 0.6*len(mc_inputs  )) ] 
-    mc_training_weights    = mc_weights[: int( 0.6*len(mc_inputs  )) ] 
+    mc_training_inputs     = mc_inputs[: int( training_percent*len(mc_inputs  )) ] 
+    mc_training_conditions = mc_conditions[: int( training_percent*len(mc_inputs  )) ] 
+    mc_training_weights    = mc_weights[: int( training_percent*len(mc_inputs  )) ] 
 
     # now, the validation dataset
-    data_validation_inputs     = data_inputs[int( 0.6*len(data_inputs  )):int( 0.65*len(data_inputs  )) ] 
-    data_validation_conditions = data_conditions[int( 0.6*len(data_inputs  )):int( 0.65*len(data_inputs  )) ] 
-    data_validation_weights    = data_weights[int( 0.6*len(data_inputs  )):int( 0.65*len(data_inputs  )) ] 
+    data_validation_inputs     = data_inputs[int(training_percent*len(data_inputs  )):int( validation_percent*len(data_inputs  )) ] 
+    data_validation_conditions = data_conditions[int(training_percent*len(data_inputs  )):int( validation_percent*len(data_inputs  )) ] 
+    data_validation_weights    = data_weights[int(training_percent*len(data_inputs  )):int( validation_percent*len(data_inputs  )) ] 
 
-    mc_validation_inputs     = mc_inputs[int( 0.6*len(mc_inputs  )):int( 0.65*len(mc_inputs  )) ] 
-    mc_validation_conditions = mc_conditions[int( 0.6*len(mc_inputs  )):int( 0.65*len(mc_inputs  )) ] 
-    mc_validation_weights    = mc_weights[int( 0.6*len(mc_inputs  )):int( 0.65*len(mc_inputs  )) ] 
+    mc_validation_inputs     = mc_inputs[int(training_percent*len(mc_inputs  )):int( validation_percent*len(mc_inputs  )) ] 
+    mc_validation_conditions = mc_conditions[int(training_percent*len(mc_inputs  )):int( validation_percent*len(mc_inputs  )) ] 
+    mc_validation_weights    = mc_weights[int(training_percent*len(mc_inputs  )):int( validation_percent*len(mc_inputs  )) ] 
 
     # now for the grand finalle, the test tensors
-    data_test_inputs     = data_inputs[int( 0.65*len(data_inputs  )): ] 
-    data_test_conditions = data_conditions[int( 0.65*len(data_inputs  )): ] 
-    data_test_weights    = data_weights[int( 0.65*len(data_inputs  )): ] 
+    data_test_inputs     = data_inputs[int( validation_percent*len(data_inputs  )): ] 
+    data_test_conditions = data_conditions[int( validation_percent*len(data_inputs  )): ] 
+    data_test_weights    = data_weights[int( validation_percent*len(data_inputs  )): ] 
 
-    mc_test_inputs     = mc_inputs[int( 0.65*len(mc_inputs  )): ] 
-    mc_test_conditions = mc_conditions[int( 0.65*len(mc_inputs  )):] 
-    mc_test_weights    = mc_weights[int( 0.65*len(mc_inputs  )):] 
+    mc_test_inputs     = mc_inputs[int( validation_percent*len(mc_inputs  )): ] 
+    mc_test_conditions = mc_conditions[int( validation_percent*len(mc_inputs  )):] 
+    mc_test_weights    = mc_weights[int( validation_percent*len(mc_inputs  )):] 
 
     # now, all the tensors are saved so they can be read by the training class
     path_to_save_tensors = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/data_reading/saved_tensors/zee_tensors/"
@@ -191,8 +196,6 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
 
 def read_zee_data():
 
-    path_to_data = "/net/scratch_cms3a/daumann/nanoAODv12_Production/"
-
     # We want to correct the variables that are used as input to run3 photon MVA ID
     var_list = ["probe_energyRaw",
                 "probe_r9", 
@@ -215,18 +218,41 @@ def read_zee_data():
     # These variables will be used as conditions to the normalizing flow - they will not be transformed!
     conditions_list = [ "probe_pt","probe_ScEta","probe_phi","fixedGridRhoAll"]
 
-    # Lets now read the data and simultion as pandas dataframes
-    files_DY_mc  = glob.glob( path_to_data + "DY_postEE_v12/nominal/*.parquet")
-    files_DY_mc = files_DY_mc[:200]
-    simulation   = [pd.read_parquet(f) for f in files_DY_mc]
-    drell_yan_df = pd.concat(simulation,ignore_index=True)
+    # If true read nanoAODv13 (high precision) , else v12 (low precision)
+    read_nano_v13 = True
+    if( read_nano_v13 ):
 
-    # now the data files for the epochs F and G
-    files_DY_data_F = glob.glob( "/net/scratch_cms3a/daumann/nanoAODv12_Production/Data_Run2022F_v12/nominal/*.parquet")
-    files_DY_data_F = files_DY_data_F[:300]
+        path_to_data =  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/"
 
-    files_DY_data_G  = glob.glob( "/net/scratch_cms3a/daumann/nanoAODv12_Production/Data_Run2022G_v12/nominal/*.parquet")
-    files_DY_data_G = files_DY_data_G[:300]
+        # Lets now read the data and simultion as pandas dataframes
+        files_DY_mc  = glob.glob( "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/DY_postEE_v13/nominal/*.parquet")
+        files_DY_mc = files_DY_mc[:300]
+        simulation   = [pd.read_parquet(f) for f in files_DY_mc]
+        drell_yan_df = pd.concat(simulation,ignore_index=True)
+
+        # now the data files for the epochs F and G
+        files_DY_data_F = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataG_v13/nominal/*.parquet")
+        files_DY_data_F = files_DY_data_F[:300]
+
+        files_DY_data_G  = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataG_v13/nominal/*.parquet")
+        files_DY_data_G = files_DY_data_G[:300]
+
+    else:
+        
+        path_to_data = "/net/scratch_cms3a/daumann/nanoAODv12_Production/"
+
+        # Lets now read the data and simultion as pandas dataframes
+        files_DY_mc  = glob.glob( path_to_data + "DY_postEE_v12/nominal/*.parquet")
+        files_DY_mc = files_DY_mc[:20]
+        simulation   = [pd.read_parquet(f) for f in files_DY_mc]
+        drell_yan_df = pd.concat(simulation,ignore_index=True)
+
+        # now the data files for the epochs F and G
+        files_DY_data_F = glob.glob( "/net/scratch_cms3a/daumann/nanoAODv12_Production/Data_Run2022F_v12/nominal/*.parquet")
+        files_DY_data_F = files_DY_data_F[:30]
+
+        files_DY_data_G  = glob.glob( "/net/scratch_cms3a/daumann/nanoAODv12_Production/Data_Run2022G_v12/nominal/*.parquet")
+        files_DY_data_G = files_DY_data_G[:30]
 
     # merhging both dataframes
     files_DY_data = [files_DY_data_G,files_DY_data_F]
@@ -245,6 +271,7 @@ def read_zee_data():
 
     # now, due to diferences in kinematics, a rewighting in the four kinematic variables [pt,eta,phi and rho] will be perform
     mc_weights   = drell_yan_df["weight"]
+    mc_weights_before = mc_weights
     data_weights = np.ones( len( data_df["fixedGridRhoAll"] ) )
     data_weights, mc_weights = perform_zee_kinematics_reweighting(data_df[conditions_list][mask_data], data_weights[mask_data], drell_yan_df[conditions_list][mask_mc], mc_weights[mask_mc])
 
@@ -252,7 +279,7 @@ def read_zee_data():
     path_to_plots = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/plot/validation_plots/"
 
     # now as a last step, we need to split the data into training, validation and test dataset
-    plot_utils.plot_distributions( path_to_plots, data_df[mask_data], drell_yan_df[mask_mc], mc_weights, [var_list, conditions_list] )
+    plot_utils.plot_distributions( path_to_plots, data_df[mask_data], drell_yan_df[mask_mc], mc_weights , [var_list, conditions_list], weights_befores_rw = mc_weights_before[mask_mc])
 
     # now, the datsets will be separated into training, validation and test dataset, and saved for further reading by the training class!
     separate_training_data(data_df[mask_data], drell_yan_df[mask_mc], mc_weights, data_weights, var_list, conditions_list)

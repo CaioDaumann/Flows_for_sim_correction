@@ -15,6 +15,10 @@ import data_reading.read_data as data_reader
 import plot.plot_utils        as plot_utils
 import normalizing_flows.training_utils as training_utils
 
+def test_big_boy():
+    assert 1 == 1
+
+
 def main():
     print("Welcome to the simulation corrections 2000!")
 
