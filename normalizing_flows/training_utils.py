@@ -36,7 +36,7 @@ class Simulation_correction():
 
         # Checking if cuda is avaliable
         print('Checking cuda avaliability: ', torch.cuda.is_available())
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device('cpu' if torch.cuda.is_available() else 'cpu')
         self.device = device
 
         #reading important tensors
@@ -158,14 +158,14 @@ class Simulation_correction():
     # load the trained model and perform the final plots!
     def evaluate_results(self):
         
-        # Results are evaluated in the test dataset, never seen by the neural network!
-        # A mask is applied so only MC events are chossen from the data space
-        MaskOnlyvalidationMC       = self.validation_conditions[:,self.validation_conditions.size()[1] -1 ] == 0
-        self.validation_conditions = self.validation_conditions[MaskOnlyvalidationMC]
-        self.validation_inputs     = self.validation_inputs[MaskOnlyvalidationMC]
-        self.validation_weights    = self.validation_weights[MaskOnlyvalidationMC]
-
         with torch.no_grad():
+
+            # Results are evaluated in the test dataset, never seen by the neural network!
+            # A mask is applied so only MC events are chossen from the data space
+            MaskOnlyvalidationMC       = self.validation_conditions[:,self.validation_conditions.size()[1] -1 ] == 0
+            self.validation_conditions = self.validation_conditions[MaskOnlyvalidationMC]
+            self.validation_inputs     = self.validation_inputs[MaskOnlyvalidationMC]
+            self.validation_weights    = self.validation_weights[MaskOnlyvalidationMC]
 
             trans      = self.flow(self.mc_test_conditions).transform
             sim_latent = trans(    self.mc_test_inputs )
@@ -174,6 +174,13 @@ class Simulation_correction():
 
             trans2 = self.flow(self.mc_test_conditions).transform
             self.samples = trans2.inv( sim_latent)
+
+            # lets save the means and std used for the transformations
+            np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'input_means.npy', self.input_mean_for_std)
+            np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'input_std.npy'  , self.input_std_for_std )
+
+            np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'conditions_means.npy', self.condition_mean_for_std)
+            np.save( os.getcwd() + '/results/' +self.configuration + '/'  +  'conditions_std.npy' , self.condition_std_for_std )
 
             # now, lets invert the transformations
             self.invert_transformation()
@@ -218,11 +225,11 @@ class Simulation_correction():
             
             # since hoe has very low values, the shift value (value until traingular events are sampled) must be diferent here
             if( index == 6 ):
-                self.vector_for_iso_constructors_data.append( Make_iso_continuous(self.data_training_inputs[:,index], b = 0.001) )
-                self.vector_for_iso_constructors_mc.append( Make_iso_continuous(self.mc_training_inputs[:,index] , b= 0.001) )
+                self.vector_for_iso_constructors_data.append( Make_iso_continuous(self.data_training_inputs[:,index], self.device , b = 0.001) )
+                self.vector_for_iso_constructors_mc.append( Make_iso_continuous(self.mc_training_inputs[:,index], self.device  , b= 0.001) )
             else:
-                self.vector_for_iso_constructors_data.append( Make_iso_continuous(self.data_training_inputs[:,index]) )
-                self.vector_for_iso_constructors_mc.append( Make_iso_continuous(self.mc_training_inputs[:,index]) )
+                self.vector_for_iso_constructors_data.append( Make_iso_continuous(self.data_training_inputs[:,index], self.device ) )
+                self.vector_for_iso_constructors_mc.append( Make_iso_continuous(self.mc_training_inputs[:,index], self.device ) )
 
         # now really applying the transformations
         counter = 0
@@ -267,7 +274,7 @@ class Simulation_correction():
         print( self.condition_std_for_std )
         exit()
         """
-
+    
         # transorming the training tensors
         self.training_inputs = ( self.training_inputs - self.input_mean_for_std  )/self.input_std_for_std
         self.training_conditions[:,:-1] = ( self.training_conditions[:,:-1] - self.condition_mean_for_std )/self.condition_std_for_std
@@ -366,8 +373,10 @@ class Simulation_correction():
 
 # this is the class responsable for the isolation variables transformation
 class Make_iso_continuous:
-    def __init__(self, tensor, b = False):
+    def __init__(self, tensor, device, b = False):
         
+        self.device = device
+
         #tensor = tensor.cpu()
         self.iso_bigger_zero  = tensor > 0 
         self.iso_equal_zero   = tensor == 0
@@ -393,7 +402,7 @@ class Make_iso_continuous:
         # now a log trasform is applied on top of the smoothing to stretch the events in the 0 traingular and "kill" the iso tails
         tensor = torch.log(  1e-3 + tensor ) 
         
-        return tensor.to('cuda')
+        return tensor.to(self.device)
     
     #inverse operation of the above shift_and_sample transform
     def inverse_shift_and_sample( self,tensor , processed = False):
@@ -414,4 +423,4 @@ class Make_iso_continuous:
             assert (abs(torch.sum(  self.before_transform - tensor )) < tensor.size()[0]*1e-6 )
             #added the tensor.size()[0]*1e-6 term due to possible numerical fluctioations!
               
-        return tensor.to('cuda')
+        return tensor.to(self.device)

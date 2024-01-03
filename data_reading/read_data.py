@@ -67,7 +67,7 @@ def perform_zee_kinematics_reweighting(data_array, data_weights, mc_array, mc_we
     phi_min, phi_max = -3.15,3.15
 
     # now the number of bins in each distribution
-    pt_bins,rho_bins,eta_bins,phi_bins = 10, 30, 10, 2 #was 20, 30, 10, 4
+    pt_bins,rho_bins,eta_bins,phi_bins = 10, 32, 12, 2 #was 20, 30, 10, 4
 
     # Now we create a 4d histogram of this kinematic variables
     mc_histo,   edges = np.histogramdd( sample =  (mc_array[:,0] ,   mc_array[:,3],      mc_array[:,1], mc_array[:,2])   , bins = (pt_bins,rho_bins,eta_bins,phi_bins), range = [   [pt_min,pt_max], [ rho_min, rho_max ],[eta_min,eta_max], [phi_min,phi_max]  ], weights = mc_weights )
@@ -225,17 +225,22 @@ def read_zee_data():
         path_to_data =  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/"
 
         # Lets now read the data and simultion as pandas dataframes
-        files_DY_mc  = glob.glob( "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/DY_postEE_v13/nominal/*.parquet")
+        files_DY_mc  = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/DY_postEE_v13/nominal/*.parquet")
         files_DY_mc = files_DY_mc[:300]
         simulation   = [pd.read_parquet(f) for f in files_DY_mc]
         drell_yan_df = pd.concat(simulation,ignore_index=True)
 
         # now the data files for the epochs F and G
-        files_DY_data_F = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataG_v13/nominal/*.parquet")
+        files_DY_data_E = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataE_v13/nominal/*.parquet")
+        files_DY_data_E = files_DY_data_E[:300]
+
+        files_DY_data_F = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataF_v13/nominal/*.parquet")
         files_DY_data_F = files_DY_data_F[:300]
 
         files_DY_data_G  = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataG_v13/nominal/*.parquet")
         files_DY_data_G = files_DY_data_G[:300]
+
+        # I think there is a problem with the samples above, lets test with the new samples!
 
     else:
         
@@ -255,7 +260,7 @@ def read_zee_data():
         files_DY_data_G = files_DY_data_G[:30]
 
     # merhging both dataframes
-    files_DY_data = [files_DY_data_G,files_DY_data_F]
+    files_DY_data = [files_DY_data_E,files_DY_data_G,files_DY_data_F]
 
     data   = [pd.read_parquet(f) for f in files_DY_data]
     data_df = pd.concat(data,ignore_index=True)
@@ -269,11 +274,18 @@ def read_zee_data():
     # The selection will be done in the perform_zee_selection() function
     mask_data, mask_mc = perform_zee_selection( data_df, drell_yan_df )
 
+    # Switch to decide if reweihting is used or no!
+    perform_reweithing = True
+
     # now, due to diferences in kinematics, a rewighting in the four kinematic variables [pt,eta,phi and rho] will be perform
     mc_weights   = drell_yan_df["weight"]
     mc_weights_before = mc_weights
     data_weights = np.ones( len( data_df["fixedGridRhoAll"] ) )
-    data_weights, mc_weights = perform_zee_kinematics_reweighting(data_df[conditions_list][mask_data], data_weights[mask_data], drell_yan_df[conditions_list][mask_mc], mc_weights[mask_mc])
+    
+    if( perform_reweithing ):
+        data_weights, mc_weights = perform_zee_kinematics_reweighting(data_df[conditions_list][mask_data], data_weights[mask_data], drell_yan_df[conditions_list][mask_mc], mc_weights[mask_mc])
+    else:
+        data_weights, mc_weights = np.array(data_weights[mask_data])/np.sum( np.array(data_weights[mask_data]) ), np.array(mc_weights[mask_mc])/np.sum(np.array(mc_weights[mask_mc])) #perform_zee_kinematics_reweighting(data_df[conditions_list][mask_data], data_weights[mask_data], drell_yan_df[conditions_list][mask_mc], mc_weights[mask_mc])
 
     # now lets call a plotting function to perform the plots of the read distributions for validation porpuses
     path_to_plots = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/plot/validation_plots/"

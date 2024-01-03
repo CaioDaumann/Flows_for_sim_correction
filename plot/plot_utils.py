@@ -225,13 +225,13 @@ def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_wei
             std  = np.std(  np.array(data_tensor[:,i]) )
 
             if( 'Iso' in str(var_list[i]) or 'DR' in str(var_list[i]) or 'esE' in str(var_list[i]) or 'hoe' in str(var_list[i]) or 'energy' in str(var_list[i])  ):
-                data_hist            = hist.Hist(hist.axis.Regular(45, 0.0 , mean + 2.0*std))
-                mc_hist              = hist.Hist(hist.axis.Regular(45, 0.0 , mean + 2.0*std))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(45, 0.0 , mean + 2.0*std))
+                data_hist            = hist.Hist(hist.axis.Regular(50, 0.0 , mean + 2.0*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(50, 0.0 , mean + 2.0*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(50, 0.0 , mean + 2.0*std))
             else:
-                data_hist            = hist.Hist(hist.axis.Regular(45, mean - 2.5*std, mean + 2.5*std))
-                mc_hist              = hist.Hist(hist.axis.Regular(45, mean - 2.5*std, mean + 2.5*std))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(45, mean - 2.5*std, mean + 2.5*std))
+                data_hist            = hist.Hist(hist.axis.Regular(50, mean - 2.5*std, mean + 2.5*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(50, mean - 2.5*std, mean + 2.5*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(50, mean - 2.5*std, mean + 2.5*std))
 
             if( 'DR04' in str(var_list[i])  ):
                 data_hist            = hist.Hist(hist.axis.Regular(50, 0.0 , 5.0))

@@ -51,6 +51,8 @@ def main():
         corrections.setup_flow()
         corrections.train_the_flow()
 
+        #exit()
+
     # Now, we call the class that handles the transformations, training and validaiton of the corrections
     #corrections = training_utils.Simulation_correction()
     #corrections.setup_flow()
