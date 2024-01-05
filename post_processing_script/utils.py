@@ -10,6 +10,9 @@ import glob
 import torch
 import pandas as pd
 import zuko
+from typing import Any, Dict, List, Optional, Tuple
+import xgboost
+import awkward
 
 import matplotlib.pyplot as plt 
 import mplhep, hist
@@ -153,5 +156,147 @@ def apply_flow( input_tensor: torch.tensor, conditions_tensor: torch.tensor, flo
     
     return samples
 
-def recalculate_run3_photon_mvaID():
-    return 0
+def load_photonid_mva_run3(fname: str) -> Optional[xgboost.Booster]:
+
+    """ Reads and returns both the EB and EE Xgboost run3 mvaID models """
+
+    photonid_mva_EB = xgboost.Booster()
+    photonid_mva_EB.load_model(fname + 'model.json')
+
+    photonid_mva_EE = xgboost.Booster()
+    photonid_mva_EE.load_model(fname + 'model_endcap.json')
+    
+    return photonid_mva_EB, photonid_mva_EE
+
+
+def calculate_photonid_mva_run3(
+    mva: Tuple[Optional[xgboost.Booster], List[str]],
+    photon: awkward.Array,
+) -> awkward.Array:
+   
+    """Recompute PhotonIDMVA on-the-fly. This step is necessary considering that the inputs have to be corrected
+    with the QRC process. Following is the list of features (barrel has 12, endcap two more):
+    EB:
+        events.Photon.energyRaw
+        events.Photon.r9
+        events.Photon.sieie
+        events.Photon.etaWidth
+        events.Photon.phiWidth
+        events.Photon.sieip
+        events.Photon.s4
+        events.photon.hoe
+        probe_ecalPFClusterIso
+        probe_trkSumPtHollowConeDR03
+        probe_trkSumPtSolidConeDR04
+        probe_pfChargedIso
+        probe_pfChargedIsoWorstVtx
+        events.Photon.ScEta
+        events.fixedGridRhoAll
+
+    EE: + 
+        events.Photon.energyRaw
+        events.Photon.r9
+        events.Photon.sieie
+        events.Photon.etaWidth
+        events.Photon.phiWidth
+        events.Photon.sieip
+        events.Photon.s4
+        events.photon.hoe
+        probe_ecalPFClusterIso
+        probe_hcalPFClusterIso
+        probe_trkSumPtHollowConeDR03
+        probe_trkSumPtSolidConeDR04
+        probe_pfChargedIso
+        probe_pfChargedIsoWorstVtx
+        events.Photon.ScEta
+        events.fixedGridRhoAll    
+        events.Photon.esEffSigmaRR
+        events.Photon.esEnergyOverRawE
+    """
+    photonid_mva, var_order = mva
+
+    if photonid_mva is None:
+        return awkward.ones_like(photon.pt)
+
+
+    bdt_inputs = {}
+    
+    bdt_inputs = np.column_stack(
+        [np.array(photon[name]) for name in var_order]
+    )
+
+    tempmatrix = xgboost.DMatrix(bdt_inputs)
+
+    mvaID = photonid_mva.predict(tempmatrix)
+
+    # Only needed to compare to TMVA
+    mvaID = 1.0 - 2.0 / (1.0 + np.exp(2.0 * mvaID))
+
+    return mvaID
+
+
+def add_corr_photonid_mva_run3( photons: awkward.Array, process) -> awkward.Array:
+
+        preliminary_path = '/net/scratch_cms3a/daumann/HiggsDNA/higgs_dna/tools/'
+        photonid_mva_EB, photonid_mva_EE = load_photonid_mva_run3(preliminary_path)
+
+        # Now mvaID for the corrected variables
+
+        inputs_EB = ["energyRaw",
+            "r9_corr", 
+            "sieie_corr",
+            "etaWidth_corr",
+            "phiWidth_corr",
+            "sieip_corr",
+            "s4_corr",
+            "hoe_corr",
+            "ecalPFClusterIso_corr",
+            "trkSumPtHollowConeDR03_corr",
+            "trkSumPtSolidConeDR04_corr",
+            "pfChargedIso_corr",
+            "pfChargedIsoWorstVtx_corr",
+            "ScEta",
+            "fixedGridRhoAll"]
+
+        inputs_EE = ["energyRaw",
+            "r9_corr", 
+            "sieie_corr",
+            "etaWidth_corr",
+            "phiWidth_corr",
+            "sieip_corr",
+            "s4_corr",
+            "hoe_corr",
+            "ecalPFClusterIso_corr",
+            "hcalPFClusterIso_corr",
+            "trkSumPtHollowConeDR03_corr",
+            "trkSumPtSolidConeDR04_corr",
+            "pfChargedIso_corr",
+            "pfChargedIsoWorstVtx_corr",
+            "ScEta",
+            "fixedGridRhoAll",
+            "esEffSigmaRR_corr",
+            "esEnergyOverRawE_corr"]
+
+        photon_types_Zee = ["tag","probe"]
+        corrected_mva_id = []
+
+        for photon_type in photon_types_Zee:
+
+            # Now calculating the corrected mvaID
+            isEB = awkward.to_numpy(np.abs( np.array( photons[ photon_type + "_ScEta"])) < 1.5)
+
+            inputs_EB_corr = [photon_type + "_" + s if "fixedGridRhoAll" not in s else s for s in inputs_EB]
+
+            corr_mva_EB = calculate_photonid_mva_run3(
+                [photonid_mva_EB,inputs_EB_corr], photons
+            )
+            
+            inputs_EE_corr = [photon_type + "_" + s if "fixedGridRhoAll" not in s else s for s in inputs_EE]
+            
+            corr_mva_EE = calculate_photonid_mva_run3(
+                [photonid_mva_EE, inputs_EE_corr], photons
+            )
+            corrected_mva_id.append( awkward.where(isEB, corr_mva_EB, corr_mva_EE) )
+
+        return corrected_mva_id[0], corrected_mva_id[1]
+
