@@ -25,6 +25,14 @@ To run the tests one need to have the set the configurations of the flow in the 
 
 The code is not fully finished, so one may need to set one or two paths.
 
+## Apllyting this to HiggsDNA outputs
+
+In order to apply the correction to HiggsDNA outputs, one can use the files inside the post_processing_script folder.
+
+there is already a example of a shell script to perform the corrections, one just have to specify the path of the MC outputs of HiggsDNA and the process Zee,Zmmg, etc ...
+
+The script will calculate the corrections and add them as new entries to the .parquet file.
+
 ## Condor submission
 
 These files are set up to run at the RWTH Aachen condor infrastructure. The scripts specifically asks for a gpu machine in our cluster, but that can be easily changed in the flow.sub script.
