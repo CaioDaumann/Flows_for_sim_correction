@@ -36,100 +36,119 @@ var_list = [    "r9",
 
 conditions_list = [ "pt","ScEta","phi","fixedGridRhoAll"]
 
+systematic_list = [""]
+
 def main():
 
     global var_list
     global conditions_list
 
-    # Reading the files as a dataframe
-    files = glob.glob( args.mcfilespath + "*.parquet" )
-    files = files[:100]
+    for systematic in systematic_list:
 
-    # concatenating the files
-    data  = [pd.read_parquet(f) for f in files]
-    mc_df = pd.concat(data,ignore_index=True)   
+        # Reading the files as a dataframe
+        files = glob.glob( args.mcfilespath + systematic + "/*.parquet" )
+        if len(files) == 0:
+            print( "\nSystematic ", systematic , " is not avaliable in the path: ", args.mcfilespath  )
+            continue
 
-    # Making sure the process is correclty selected
-    if( args.process is None ):
-        print( 'Specify a process! - Terminating' )
-        exit()
-    elif( args.process not in processes ):
-        print( "Specify a existing process: ", processes )
-        exit()
-    
-    print( '\nApplyting the normalizing flows corrections to the ', args.process , ' process samples!\n'  )
+        print( '\nProcessing the systematic: ', systematic )
 
-    # As a first test, lets do it only for probe photons! - after we generalize to probe and tag
-    if( args.process == "Zee" ):
+        # concatenating the files
+        mc  = [pd.read_parquet(f) for f in files]
+        mc_df = pd.concat(mc,ignore_index=True)   
+
+        # Making sure the process is correclty selected
+        if( args.process is None ):
+            print( 'Specify a process! - Terminating' )
+            exit()
+        elif( args.process not in processes ):
+            print( "Specify a existing process: ", processes )
+            exit()
         
-        input_list_probe      = [ "probe_" + s  for s in var_list]
-        conditions_list_probe = [ "probe_" + s  for s in conditions_list[:-1]]
-        conditions_list_probe.append( "fixedGridRhoAll" )
+        print( '\nApplyting the normalizing flows corrections to the ', args.process , ' process samples!\n'  )
 
-        input_list_tag      = [ "tag_" + s  for s in var_list]
-        conditions_list_tag = [ "tag_" + s  for s in conditions_list[:-1]]
-        conditions_list_tag.append( "fixedGridRhoAll" )
+        # As a first test, lets do it only for probe photons! - after we generalize to probe and tag
+        if( args.process == "Zee" ):
+            
+            input_list_probe      = [ "probe_" + s  for s in var_list]
+            conditions_list_probe = [ "probe_" + s  for s in conditions_list[:-1]]
+            conditions_list_probe.append( "fixedGridRhoAll" )
 
-        input_lists     = [ input_list_tag,input_list_probe ]
-        conditions_list = [conditions_list_tag, conditions_list_probe]
-    elif( args.process == "Zmmg" ):
+            input_list_tag      = [ "tag_" + s  for s in var_list]
+            conditions_list_tag = [ "tag_" + s  for s in conditions_list[:-1]]
+            conditions_list_tag.append( "fixedGridRhoAll" )
+
+            input_lists     = [ input_list_tag,input_list_probe ]
+            condition_list = [conditions_list_tag, conditions_list_probe]
         
-        # There is only one photon here ...
-        input_list_photon      = [ "photon_" + s  for s in var_list]
-        conditions_list_photon = [ "photon_" + s  for s in conditions_list[:-1]]
-        conditions_list_photon.append( "Rho_fixedGridRhoAll" )
+        elif( args.process == "Zmmg" ):
+            
+            # There is only one photon here ...
+            input_list_photon      = [ "photon_" + s  for s in var_list]
+            conditions_list_photon = [ "photon_" + s  for s in conditions_list[:-1]]
+            conditions_list_photon.append( "Rho_fixedGridRhoAll" )
 
-        input_lists     = [ input_list_photon ]
-        conditions_list = [ conditions_list_photon ]    
+            input_lists     = [ input_list_photon ]
+            condition_list = [ conditions_list_photon ]    
 
-    # Now applying the flow to the "photon_type" {tag,probe : lead,sublead, ...}
-    for photon_type_inputs, photon_type_conditions in zip(input_lists,conditions_list ): 
+        # Now applying the flow to the "photon_type" {tag,probe : lead,sublead, ...}
+        for photon_type_inputs, photon_type_conditions in zip(input_lists,condition_list ): 
 
-        # From pandas DF to pytorch tensors for the flow processing
-        mc_flow_inputs       = torch.tensor(  np.array( mc_df[photon_type_inputs]  ) )
-        mc_flow_conditions   = torch.tensor(  np.concatenate(  [np.array( mc_df[photon_type_conditions] ), 0*np.ones(  len(mc_df)  ).reshape(-1,1) ] , axis = 1  )  )
+            # From pandas DF to pytorch tensors for the flow processing
+            mc_flow_inputs       = torch.tensor(  np.array( mc_df[photon_type_inputs]  ) )
+            mc_flow_conditions   = torch.tensor(  np.concatenate(  [np.array( mc_df[photon_type_conditions] ), 0*np.ones(  len(mc_df)  ).reshape(-1,1) ] , axis = 1  )  )
 
-        # Now we proceed to the calculation of the corrections
-        # 1. we load the PostEE flow model
-        flow = zuko.flows.NSF( mc_flow_inputs.size()[1] , context = mc_flow_conditions.size()[1], bins = 10,transforms = 5, hidden_features=[256] * 2)
-        path_means_std = '/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/results/configuration_v13_big_stats_9_long_train/'
-        flow.load_state_dict(torch.load( path_means_std + 'best_model_.pth', map_location=torch.device('cpu')))
+            # Now we proceed to the calculation of the corrections
+            flow = zuko.flows.NSF( mc_flow_inputs.size()[1] , context = mc_flow_conditions.size()[1], bins = 10,transforms = 5, hidden_features=[256] * 2)
+            if( args.period == "postEE" ):
+                path_means_std = "./flow_models/postEE/"
+                flow.load_state_dict(torch.load( path_means_std + 'best_model_.pth', map_location=torch.device('cpu')))
+            elif( args.period == "preEE" ):
+                path_means_std = "./flow_models/preEE/"
+                flow.load_state_dict(torch.load( path_means_std + 'best_model_.pth', map_location=torch.device('cpu')))
+            else:
+                print( "Period should be either postEE or preEE!" )
 
-        device = torch.device('cpu') 
+            device = torch.device('cpu') 
 
-        # 2. The samples are pre-processed [standartization and Isolation variables transformation]
-        print('Pre-processing the samples...')
-        input_tensor, conditions_tensor, input_mean_for_std, input_std_for_std, condition_mean_for_std,condition_std_for_std, vector_for_iso_constructors_mc = utils.perform_pre_processing(mc_flow_inputs.to(device), mc_flow_conditions.to(device), path_means_std)
+            print('Model read!')
 
-        # 3. Process the samples with the flow
-        print('Processing the samples...')
-        samples = utils.apply_flow( input_tensor, conditions_tensor, flow )
+            # 2. The samples are pre-processed [standartization and Isolation variables transformation]
+            print('Pre-processing the samples...')
+            input_tensor, conditions_tensor, input_mean_for_std, input_std_for_std, condition_mean_for_std,condition_std_for_std, vector_for_iso_constructors_mc = utils.perform_pre_processing(mc_flow_inputs.to(device), mc_flow_conditions.to(device), path_means_std)
 
-        # 4. Inverting the transformations! - test what happens if we input the original mc here!
-        corrected_inputs = utils.invert_pre_processing(samples,  input_mean_for_std, input_std_for_std, vector_for_iso_constructors_mc)
+            # 3. Process the samples with the flow
+            print('Processing the samples...')
+            samples = utils.apply_flow( input_tensor, conditions_tensor, flow )
 
-        # Adding the corrected entries to the df
-        for i in range( len(var_list) ):
-            mc_df[ photon_type_inputs[i] + "_corr" ] =  corrected_inputs[:,i]
+            # 4. Inverting the transformations! - test what happens if we input the original mc here!
+            corrected_inputs = utils.invert_pre_processing(samples,  input_mean_for_std, input_std_for_std, vector_for_iso_constructors_mc)
 
-    # Now the corrected mvaID is calculated
-    mvaID_tag, mva_ID_probe = utils.add_corr_photonid_mva_run3(mc_df,args.process)
-    
-    mc_df["tag_mvaID_corr"]   = mvaID_tag
-    mc_df["probe_mvaID_corr"] = mva_ID_probe
-    
-    # As zmmg has only one photon, we dont calculate the sigma_m for it
-    if( args.process != "Zmmg"  ):
-        
-        try:
-            mc_df[ "sigma_m_over_m_corr" ] = (0.5)*np.sqrt( (mc_df["tag_energyErr_corr"]/(  mc_df["tag_pt"]*np.cosh( mc_df[ "tag_eta" ] )  ))**2 +   (mc_df["probe_energyErr_corr"]/(  mc_df["probe_pt"]*np.cosh( mc_df[ "probe_eta" ] )  ))**2   )
-        except:
-            mc_df[ "sigma_m_over_m_corr" ] = (0.5)*np.sqrt( (mc_df["pho_lead_energyErr_corr"]/(  mc_df["pho_lead_pt"]*np.cosh( mc_df[ "pho_lead_eta" ] )  ))**2 +   (mc_df["pho_sublead_energyErr_corr"]/(  mc_df["pho_sublead_pt"]*np.cosh( mc_df[ "pho_sublead_eta" ] )  ))**2   )
+            # Adding the corrected entries to the df
+            for i in range( len(var_list) ):
+                mc_df[ photon_type_inputs[i] + "_corr" ] =  corrected_inputs[:,i]
 
-    print( 'Testing: ', mc_df[ "sigma_m_over_m_corr" ] )
+        # Now the corrected mvaID is calculated
+        if( args.process == "Zee"  ):
+            mvaID_tag, mva_ID_probe = utils.add_corr_photonid_mva_run3(mc_df,args.process)
+            mc_df["tag_mvaID_corr"]   = mvaID_tag
+            mc_df["probe_mvaID_corr"] = mva_ID_probe
+        elif( args.process == "Zmmg" ):
+            corr_mvaID = utils.add_corr_photonid_mva_run3_zmmg(mc_df,args.process)
+            mc_df["photon_corr_mvaID_run3"] = corr_mvaID
 
-    # Dumping the df file with the new entries
-    mc_df.to_parquet("validate_post_processing_script/tag_and_probe.parquet")
+        # As zmmg has only one photon, we dont calculate the sigma_m for it
+        if( args.process != "Zmmg"  ):
+            
+            try:
+                mc_df[ "sigma_m_over_m_corr" ] = (0.5)*np.sqrt( (mc_df["tag_energyErr_corr"]/(  mc_df["tag_pt"]*np.cosh( mc_df[ "tag_eta" ] )  ))**2 +   (mc_df["probe_energyErr_corr"]/(  mc_df["probe_pt"]*np.cosh( mc_df[ "probe_eta" ] )  ))**2   )
+                mc_df[ "sigma_m_over_m_smeared_corr" ] = utils.calculate_corrected_smeared_sigma_m_over_m(mc_df)
+            except:
+                mc_df[ "sigma_m_over_m_corr" ] = (0.5)*np.sqrt( (mc_df["pho_lead_energyErr_corr"]/(  mc_df["pho_lead_pt"]*np.cosh( mc_df[ "pho_lead_eta" ] )  ))**2 +   (mc_df["pho_sublead_energyErr_corr"]/(  mc_df["pho_sublead_pt"]*np.cosh( mc_df[ "pho_sublead_eta" ] )  ))**2   )
+                mc_df[ "sigma_m_over_m_smeared_corr" ] = utils.calculate_corrected_smeared_sigma_m_over_m(mc_df)
+
+        # Dumping the df file with the new entries
+        mc_df.to_parquet( args.outpath + "/zmmg_out.parquet")
 
 if __name__ == "__main__":
     
@@ -137,6 +156,8 @@ if __name__ == "__main__":
     parser.add_argument('-mcfilespath'   , '--mcfilespath'  , type=str, help= "Path to the MC files where the flow will be applied")
     parser.add_argument('-process', '--process', type = str, help = "Zee, Zmmg, Hgg, Diphoton, GJet")
     parser.add_argument('-flowmodelpath', '--flowmodelpath', type = str, help = "path to the trained flow model")
+    parser.add_argument('-period', '--period', type = str, help = "postEE, preEE")
+    parser.add_argument('-outpath', '--outpath', type = str, help = "path to the folder that contaings the trained flow models")
     args = parser.parse_args()
 
     main() 

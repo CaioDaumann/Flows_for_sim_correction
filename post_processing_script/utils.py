@@ -18,6 +18,26 @@ import matplotlib.pyplot as plt
 import mplhep, hist
 plt.style.use([mplhep.style.CMS])
 
+def calculate_corrected_smeared_sigma_m_over_m(mc_df):
+
+    #for key in mc_df.keys():
+    #    print(key)
+
+    # Try for tagandprobe framework, else diphoton nomenclature
+    try:
+        smeared_tag_energy_err   = np.sqrt( mc_df["tag_energyErr_corr"]**2 + (mc_df["tag_rho_smear"]*mc_df["tag_pt"]*np.cosh( mc_df[ "tag_eta" ] ) )**2 )
+        smeared_probe_energy_err = np.sqrt( mc_df["probe_energyErr_corr"]**2 + (mc_df["probe_rho_smear"]*mc_df["probe_pt"]*np.cosh( mc_df[ "probe_eta" ] ) )**2 )
+    
+        corrected_smeared_sigma_m_over_m = (0.5)*np.sqrt( (smeared_tag_energy_err /(  mc_df["tag_pt"]*np.cosh( mc_df[ "tag_eta" ] )  ))**2 +   (smeared_probe_energy_err/(  mc_df["probe_pt"]*np.cosh( mc_df[ "probe_eta" ] )  ))**2   )
+
+    except:
+        smeared_tag_energy_err   = np.sqrt( mc_df["pho_lead_energyErr_corr"]**2 + (mc_df["pho_lead_rho_smear"]*mc_df["pho_lead_pt"]*np.cosh( mc_df[ "pho_lead_eta" ] ) )**2 )
+        smeared_probe_energy_err = np.sqrt( mc_df["pho_sublead_energyErr_corr"]**2 + (mc_df["pho_sublead_rho_smear"]*mc_df["pho_sublead_pt"]*np.cosh( mc_df[ "pho_sublead_eta" ] ) )**2 )
+    
+        corrected_smeared_sigma_m_over_m = (0.5)*np.sqrt( (smeared_tag_energy_err /(  mc_df["tag_pt"]*np.cosh( mc_df[ "tag_eta" ] )  ))**2 +   (smeared_probe_energy_err/(  mc_df["probe_pt"]*np.cosh( mc_df[ "probe_eta" ] )  ))**2   )
+
+    return corrected_smeared_sigma_m_over_m
+
 class Make_iso_continuous:
     def __init__(self, tensor, device, b = False):
         
@@ -299,4 +319,69 @@ def add_corr_photonid_mva_run3( photons: awkward.Array, process) -> awkward.Arra
             corrected_mva_id.append( awkward.where(isEB, corr_mva_EB, corr_mva_EE) )
 
         return corrected_mva_id[0], corrected_mva_id[1]
+
+
+def add_corr_photonid_mva_run3_zmmg( photons: awkward.Array, process) -> awkward.Array:
+
+        preliminary_path = './run3_mvaID/'
+        photonid_mva_EB, photonid_mva_EE = load_photonid_mva_run3(preliminary_path)
+
+        # Now mvaID for the corrected variables
+
+        inputs_EB = ["energyRaw",
+            "r9_corr", 
+            "sieie_corr",
+            "etaWidth_corr",
+            "phiWidth_corr",
+            "sieip_corr",
+            "s4_corr",
+            "hoe_corr",
+            "ecalPFClusterIso_corr",
+            "trkSumPtHollowConeDR03_corr",
+            "trkSumPtSolidConeDR04_corr",
+            "pfChargedIso_corr",
+            "pfChargedIsoWorstVtx_corr",
+            "ScEta",
+            "Rho_fixedGridRhoAll"]
+
+        inputs_EE = ["energyRaw",
+            "r9_corr", 
+            "sieie_corr",
+            "etaWidth_corr",
+            "phiWidth_corr",
+            "sieip_corr",
+            "s4_corr",
+            "hoe_corr",
+            "ecalPFClusterIso_corr",
+            "hcalPFClusterIso_corr",
+            "trkSumPtHollowConeDR03_corr",
+            "trkSumPtSolidConeDR04_corr",
+            "pfChargedIso_corr",
+            "pfChargedIsoWorstVtx_corr",
+            "ScEta",
+            "Rho_fixedGridRhoAll",
+            "esEffSigmaRR_corr",
+            "esEnergyOverRawE_corr"]
+
+        photon_types_Zee = ["photon"]
+
+        for photon_type in photon_types_Zee:
+
+            # Now calculating the corrected mvaID
+            isEB = awkward.to_numpy(np.abs( np.array( photons[ photon_type + "_ScEta"])) < 1.5)
+
+            inputs_EB_corr = [photon_type + "_" + s if "Rho_fixedGridRhoAll" not in s else s for s in inputs_EB]
+
+            corr_mva_EB = calculate_photonid_mva_run3(
+                [photonid_mva_EB,inputs_EB_corr], photons
+            )
+            
+            inputs_EE_corr = [photon_type + "_" + s if "Rho_fixedGridRhoAll" not in s else s for s in inputs_EE]
+            
+            corr_mva_EE = calculate_photonid_mva_run3(
+                [photonid_mva_EE, inputs_EE_corr], photons
+            )
+            corrected_mva_id = awkward.where(isEB, corr_mva_EB, corr_mva_EE) 
+
+        return corrected_mva_id
 
