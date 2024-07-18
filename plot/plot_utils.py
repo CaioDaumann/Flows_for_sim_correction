@@ -11,22 +11,22 @@ import xgboost
 
 # Names of the used variables, I copied it here only so it is easier to use it acess the labels and names of teh distirbutions
 var_list = ["probe_energyRaw",
-            "probe_r9", 
-            "probe_sieie",
-            "probe_etaWidth",
-            "probe_phiWidth",
-            "probe_sieip",
-            "probe_s4",
-            "probe_hoe",
-            "probe_ecalPFClusterIso",
-            "probe_trkSumPtHollowConeDR03",
-            "probe_trkSumPtSolidConeDR04",
-            "probe_pfChargedIso",
-            "probe_pfChargedIsoWorstVtx",
-            "probe_esEffSigmaRR",
-            "probe_esEnergyOverRawE",
-            "probe_hcalPFClusterIso",
-            "probe_energyErr"]
+                "probe_r9_raw", 
+                "probe_sieie_raw",
+                "probe_etaWidth_raw",
+                "probe_phiWidth_raw",
+                "probe_sieip_raw",
+                "probe_s4_raw",
+                "probe_hoe_raw",
+                "probe_ecalPFClusterIso_raw",
+                "probe_trkSumPtHollowConeDR03_raw",
+                "probe_trkSumPtSolidConeDR04_raw",
+                "probe_pfChargedIso_raw",
+                "probe_pfChargedIsoWorstVtx_raw",
+                "probe_esEffSigmaRR_raw",
+                "probe_esEnergyOverRawE_raw",
+                "probe_hcalPFClusterIso_raw",
+                "probe_energyErr_raw"]
 
 # some variables have value of zero in barrel, so we must exclude them. I created this matrix so it is easier to do that!
 var_list_matrix_barrel = ["probe_energyRaw",
@@ -78,10 +78,9 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
     hep.histplot(
         data_hist,
         label = "Data",
-        yerr=True,
         density = True,
         color="black",
-        #linewidth=3,
+        linewidth=3,
         histtype='errorbar',
         markersize=12,
         elinewidth=3,
@@ -95,7 +94,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
     ax[0].tick_params(labelsize=22)
 
     #log scale for Iso variables
-    if( "Iso" in str(xlabel) or "DR" in str(xlabel) or 'r9' in str(xlabel) or 's4' in str(xlabel) or "esE" in str(xlabel)   ):
+    if( "Iso" in str(xlabel) or "DR" in str(xlabel) or "esE" in str(xlabel)   ): # or 'r9' in str(xlabel) or 's4' in str(xlabel)
         ax[0].set_yscale('log')
         #ax[0].set_ylim(0.001,( np.max(data_hist)/1.5e6 ))
         ax[0].set_ylim(0.001, 10.05*ax[0].get_ylim()[1])
@@ -182,7 +181,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
     return 0
 
 # This is a plot distribution suitable for dataframes, if one wants to plot tensors see "plot_distributions_for_tensors()"
-def plot_distributions( path, data_df, mc_df, mc_weights, variables_to_plot, weights_befores_rw = False ):
+def plot_distributions( path, data_df, mc_df, data_weights, mc_weights, variables_to_plot, weights_befores_rw = False ):
 
     for set in variables_to_plot:
 
@@ -204,7 +203,7 @@ def plot_distributions( path, data_df, mc_df, mc_weights, variables_to_plot, wei
                 mc_hist              = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
                 mc_rw_hist           = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
 
-            data_hist.fill( np.array(data_df[key]   )  )
+            data_hist.fill( np.array(data_df[key]   ) , weight = data_weights )
             
             if( len(weights_befores_rw)  ):
                 mc_hist.fill( np.array(  mc_df[key]), weight = weights_befores_rw )
@@ -371,6 +370,10 @@ def plot_distributions_after_transformations(training_inputs, training_condition
     data_mask = training_conditions[:,-1] == 1
     mc_mask   = training_conditions[:,-1] == 0
 
+    #print( '\n\nHere we go!\n\n' )
+    #print( np.shape( training_inputs ), len( var_list ) )
+    #print( '\n\nHere we go!\n\n' )
+
     # now we plot the distributions
     for i in range( np.shape( training_inputs[data_mask] )[1] ):
 
@@ -404,9 +407,10 @@ def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,
     energy_err_mc = mc[:,-1:]
     energy_err_mc_corrected = mc_corrected[:,-1:]
 
-    mc           = mc[:,: int( data.size()[1]  -4 ) ]
-    mc_corrected = mc_corrected[:,: int( data.size()[1]  -4 ) ]
-    data         = data[:,: int( data.size()[1]  -4 ) ]
+    # no energy raw in correlation matrices!
+    mc           = mc[:,1: int( data.size()[1]  -6 ) ]
+    mc_corrected = mc_corrected[:,1: int( data.size()[1]  -6 ) ]
+    data         = data[:,1: int( data.size()[1]  -6 ) ]
 
     data = torch.cat( [  data, energy_err_data .view(-1,1)  ], axis = 1 )
     mc = torch.cat( [  mc, energy_err_mc .view(-1,1)  ], axis = 1 )
@@ -444,11 +448,11 @@ def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,
     
     #var_list_matrix_barrel=var_list_matrix_barrel.replace('probe_', '')
 
-    ax.set_xticks(np.arange(len(var_list_matrix_barrel)))
-    ax.set_yticks(np.arange(len(var_list_matrix_barrel)))
+    ax.set_xticks(np.arange(len(var_list_matrix_barrel)-1))
+    ax.set_yticks(np.arange(len(var_list_matrix_barrel)-1))
     
-    ax.set_xticklabels(var_list_matrix_barrel,fontsize = 45 ,rotation=90)
-    ax.set_yticklabels(var_list_matrix_barrel,fontsize = 45 ,rotation=0)
+    ax.set_xticklabels(var_list_matrix_barrel[1:],fontsize = 45 ,rotation=90)
+    ax.set_yticklabels(var_list_matrix_barrel[1:],fontsize = 45 ,rotation=0)
 
 
     plt.savefig(path + '/correlation_matrix_corrected_barrel.png')
@@ -468,11 +472,11 @@ def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,
             ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 60)  
     mean = mean/count   
 
-    ax.set_xticks(np.arange(len(var_list_matrix_barrel)))
-    ax.set_yticks(np.arange(len(var_list_matrix_barrel)))
+    ax.set_xticks(np.arange(len(var_list_matrix_barrel)-1))
+    ax.set_yticks(np.arange(len(var_list_matrix_barrel)-1))
     
-    ax.set_xticklabels(var_list_matrix_barrel,fontsize = 45,rotation=90)
-    ax.set_yticklabels(var_list_matrix_barrel,fontsize = 45,rotation=0)
+    ax.set_xticklabels(var_list_matrix_barrel[1:],fontsize = 45,rotation=90)
+    ax.set_yticklabels(var_list_matrix_barrel[1:],fontsize = 45,rotation=0)
 
     ax.set_xlabel(r'(Corr_MC-Corr_data  - Metric: ' + str(mean), loc = 'center' ,fontsize = 70)
 
@@ -489,6 +493,11 @@ def plot_correlation_matrix_diference_endcap(data, data_conditions,data_weights,
     data_conditions,mc_conditions      = data_conditions[mask_data] , mc_conditions[mask_mc]
     data_weights,mc_weights            = data_weights[mask_data]    , mc_weights[mask_mc]
     
+    # removing energy Raw from here!
+    data          = data[:,1:]
+    mc            = mc[:,1:]
+    mc_corrected  = mc_corrected[:,1:]   
+
     # Some weights can of course be negative, so I had to use the abs here, since it does not accept negative weights ...
     data_corr         = torch.cov( data.T         , aweights = torch.Tensor( abs(data_weights) ))
     mc_corr           = torch.cov( mc.T           , aweights = torch.Tensor( abs(mc_weights)   ))
@@ -523,11 +532,11 @@ def plot_correlation_matrix_diference_endcap(data, data_conditions,data_weights,
     #ax.set_xticklabels(['']+var_names)
     #ax.set_yticklabels(['']+var_names)
     
-    ax.set_xticks(np.arange(len(var_list)))
-    ax.set_yticks(np.arange(len(var_list)))
+    ax.set_xticks(np.arange(len(var_list)-1))
+    ax.set_yticks(np.arange(len(var_list)-1))
     
-    ax.set_xticklabels(var_list,fontsize = 45 ,rotation=90)
-    ax.set_yticklabels(var_list,fontsize = 45 ,rotation=0)
+    ax.set_xticklabels(var_list[1:],fontsize = 45 ,rotation=90)
+    ax.set_yticklabels(var_list[1:],fontsize = 45 ,rotation=0)
 
 
     plt.savefig(path + '/correlation_matrix_corrected_endcap.png')
@@ -551,11 +560,11 @@ def plot_correlation_matrix_diference_endcap(data, data_conditions,data_weights,
             ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 60)  
     mean = mean/count   
 
-    ax.set_xticks(np.arange(len(var_list)))
-    ax.set_yticks(np.arange(len(var_list)))
+    ax.set_xticks(np.arange(len(var_list)-1))
+    ax.set_yticks(np.arange(len(var_list)-1))
     
-    ax.set_xticklabels(var_list,fontsize = 45,rotation=90)
-    ax.set_yticklabels(var_list,fontsize = 45,rotation=0)
+    ax.set_xticklabels(var_list[1:],fontsize = 45,rotation=90)
+    ax.set_yticklabels(var_list[1:],fontsize = 45,rotation=0)
 
     ax.set_xlabel(r'(Corr_MC-Corr_data  - Metric: ' + str(mean), loc = 'center' ,fontsize = 70)
 
@@ -614,13 +623,13 @@ def plot_profile_endcap( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data
 def plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,var_mc,data_mva_id,var_data,mc_weights,data_weights,path,var = 'pt' ):
     
     if 'pt' in var:
-        bins = np.linspace( 25.0, 80.0, 20 )
+        bins = np.linspace( 25.0, 65.0, 14 )
     elif 'phi' in var:
-        bins = np.linspace( -3.1415, 3.1415, 20)
+        bins = np.linspace( -3.1415, 3.1415, 14)
     elif 'eta' in var:
-        bins = np.linspace( -1.442, 1.442, 20 )
+        bins = np.linspace( -1.442, 1.442, 14 )
     elif 'rho' in var:
-        bins = np.linspace( 5.0, 50.0, 20 )
+        bins = np.linspace( 10.0, 45.0, 14 )
 
     #arrays to store the 
     position, nl_mean, data_mean, mc_mean = [],[],[],[]
@@ -700,14 +709,12 @@ def plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,var_mc,data_mva_id,var_data,m
     elif 'phi' in var:
         bins = np.linspace( -3.1415, 3.1415, 20)
     elif 'eta' in var:
-        print('ue')
         bins = np.linspace( [[-2.5,-1.442],  [1.442, 2.5] ], 20 )
-        print(bins)
     elif 'rho' in var:
         bins = np.linspace( 5.0, 50.0, 20 )
 
     #arrays to store the 
-    position, nl_mean, data_mean, mc_mean = [],[],[],[]
+    position, nl_mean, data_mean, mc_mean   = [],[],[],[]
     nl_mean_q25, data_mean_q25, mc_mean_q25 = [],[],[]
     nl_mean_q75, data_mean_q75, mc_mean_q75 = [],[],[]
 

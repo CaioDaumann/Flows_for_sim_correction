@@ -25,9 +25,6 @@ def main():
     # Lets call the function responsible for reading and treat the data
     # this function reads both mc and data, perform a basic selection and reweight the 4d-kinematics distirbutions
     # in the end they are saved into the a folder, so one doesnt need to go through this function all the time
-    re_process_data = True
-    if( re_process_data ):
-        data_reader.read_zee_data()
 
     #loop to read over network condigurations from the yaml file: - one way to do hyperparameter optimization
     stream = open("flow_configuration.yaml", 'r')
@@ -46,17 +43,16 @@ def main():
         initial_lr       = dictionary[key]["initial_lr"]
         batch_size       = dictionary[key]["batch_size"]
 
+        IsPostEE         = dictionary[key]["IsPostEE"]
+
+        re_process_data = True
+        if( re_process_data ):
+            data_reader.read_zee_data(IsPostEE)
+
         # Now, we call the class that handles the transformations, training and validaiton of the corrections
         corrections = training_utils.Simulation_correction( str(key) ,n_transforms, n_splines_bins, aux_nodes, aux_layers, max_epoch_number, initial_lr, batch_size  )
         corrections.setup_flow()
         corrections.train_the_flow()
-
-        #exit()
-
-    # Now, we call the class that handles the transformations, training and validaiton of the corrections
-    #corrections = training_utils.Simulation_correction()
-    #corrections.setup_flow()
-    #corrections.train_the_flow()
 
 if __name__ == "__main__":
     main()

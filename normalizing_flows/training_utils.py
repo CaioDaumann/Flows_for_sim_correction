@@ -34,6 +34,11 @@ class Simulation_correction():
    
     def __init__(self, configuration, n_transforms, n_splines_bins, aux_nodes, aux_layers, max_epoch_number, initial_lr, batch_size):
 
+        # if False, the inputs are not standardized!
+        self.perform_std_transform = True
+
+        print( 'Standartization: ', self.perform_std_transform )
+
         # Checking if cuda is avaliable
         print('Checking cuda avaliability: ', torch.cuda.is_available())
         device = torch.device('cpu' if torch.cuda.is_available() else 'cpu')
@@ -44,7 +49,6 @@ class Simulation_correction():
         self.remove_energy_raw_from_training()
         self.perform_transformation()
         
-
         # defining the flow hyperparametrs as menbers of the class
         self.n_transforms   = n_transforms
         self.n_splines_bins = n_splines_bins
@@ -60,7 +64,7 @@ class Simulation_correction():
         self.configuration =  configuration
         #lets create a folder with the results
         try:
-            print('\nThis run dump folder: ', os.getcwd() + '/results/' +self.configuration + '/')
+            print('\nThis run dump folder: ', os.getcwd() + '/results/LHCP_results/' +self.configuration + '/')
             #already creating the folders to store the flow states and the plots
             os.makedirs(os.getcwd() + '/results/' +self.configuration + '/',  exist_ok=True)
             os.makedirs(os.getcwd() + '/results/' +self.configuration + '/saved_states/',  exist_ok=True)
@@ -71,21 +75,22 @@ class Simulation_correction():
         # folder to which the code will store the results
         self.dump_folder = os.getcwd() + '/results/' +self.configuration + '/'
 
+
     # performs the training of the normalizing flows
     def setup_flow(self):
 
 
-        # The library we are using is zuko! 
-        flow = zuko.flows.NSF(self.training_inputs.size()[1], context=self.training_conditions.size()[1], bins = self.n_splines_bins ,transforms = self.n_transforms, hidden_features=[self.aux_nodes] * self.aux_layers)
+        # The library we are using is zuko! - passes = 2 for coupling blocks!
+        flow = zuko.flows.NSF(self.training_inputs.size()[1], context=self.training_conditions.size()[1], bins = self.n_splines_bins ,transforms = self.n_transforms, hidden_features=[self.aux_nodes] * self.aux_layers, passes = 2)
         flow.to(self.device)
         self.flow = flow
 
         self.optimizer = torch.optim.AdamW(self.flow.parameters(), lr= self.initial_lr, weight_decay=1e-6)
 
         #defining the parameters of the lr scheduler and early stopper!
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', patience = 10)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', patience = 8)
         
-        patiente_early = 16
+        patiente_early = 12
         self.early_stopper = EarlyStopper(patience = patiente_early, min_delta=0.000)
 
         # Two arrays arecreated to keep track of the loss during training
@@ -102,7 +107,7 @@ class Simulation_correction():
         self.training_weights = self.training_weights/torch.sum( self.training_weights )
 
         for epoch in range(999):
-            for batch in range(1250):
+            for batch in range(2000):
 
                 #making the graidients zero
                 self.optimizer.zero_grad()
@@ -276,16 +281,17 @@ class Simulation_correction():
         """
     
         # transorming the training tensors
-        self.training_inputs = ( self.training_inputs - self.input_mean_for_std  )/self.input_std_for_std
-        self.training_conditions[:,:-1] = ( self.training_conditions[:,:-1] - self.condition_mean_for_std )/self.condition_std_for_std
+        if( self.perform_std_transform ):
+            self.training_inputs = ( self.training_inputs - self.input_mean_for_std  )/self.input_std_for_std
+            self.training_conditions[:,:-1] = ( self.training_conditions[:,:-1] - self.condition_mean_for_std )/self.condition_std_for_std
 
-        # transforming the validaiton tensors
-        self.validation_inputs = ( self.validation_inputs - self.input_mean_for_std  )/self.input_std_for_std
-        self.validation_conditions[:,:-1] = ( self.validation_conditions[:,:-1] - self.condition_mean_for_std  )/self.condition_std_for_std
+            # transforming the validaiton tensors
+            self.validation_inputs = ( self.validation_inputs - self.input_mean_for_std  )/self.input_std_for_std
+            self.validation_conditions[:,:-1] = ( self.validation_conditions[:,:-1] - self.condition_mean_for_std  )/self.condition_std_for_std
 
-        # Now the test tensor
-        self.mc_test_inputs = ( self.mc_test_inputs - self.input_mean_for_std  )/self.input_std_for_std
-        self.mc_test_conditions[:,:-1] = ( self.mc_test_conditions[:,:-1] - self.condition_mean_for_std  )/self.condition_std_for_std
+            # Now the test tensor
+            self.mc_test_inputs = ( self.mc_test_inputs - self.input_mean_for_std  )/self.input_std_for_std
+            self.mc_test_conditions[:,:-1] = ( self.mc_test_conditions[:,:-1] - self.condition_mean_for_std  )/self.condition_std_for_std
 
         # Lets now plot the distirbutions after the transformations
         plot_utils.plot_distributions_after_transformations(self.training_inputs.clone().detach().cpu(), self.training_conditions.clone().detach().cpu(), self.training_weights.clone().detach().cpu())
@@ -294,18 +300,19 @@ class Simulation_correction():
     def invert_transformation(self):
         
         # transorming the training tensors
-        self.training_inputs = ( self.training_inputs*self.input_std_for_std + self.input_mean_for_std  )
-        self.training_conditions[:,:-1] = ( self.training_conditions[:,:-1]*self.condition_std_for_std + self.condition_mean_for_std  )
+        if( self.perform_std_transform ):
+            self.training_inputs = ( self.training_inputs*self.input_std_for_std + self.input_mean_for_std  )
+            self.training_conditions[:,:-1] = ( self.training_conditions[:,:-1]*self.condition_std_for_std + self.condition_mean_for_std  )
 
-        # inverse transforming the validation tensors
-        self.validation_inputs = ( self.validation_inputs*self.input_std_for_std + self.input_mean_for_std  )
-        self.validation_conditions[:,:-1] = ( self.validation_conditions[:,:-1]*self.condition_std_for_std - self.condition_mean_for_std  )
+            # inverse transforming the validation tensors
+            self.validation_inputs = ( self.validation_inputs*self.input_std_for_std + self.input_mean_for_std  )
+            self.validation_conditions[:,:-1] = ( self.validation_conditions[:,:-1]*self.condition_std_for_std - self.condition_mean_for_std  )
 
-        # inverse transforming the test tensors
-        self.mc_test_inputs = ( self.mc_test_inputs*self.input_std_for_std + self.input_mean_for_std  )
-        self.mc_test_conditions[:,:-1] = ( self.mc_test_conditions[:,:-1]*self.condition_std_for_std + self.condition_mean_for_std  )
+            # inverse transforming the test tensors
+            self.mc_test_inputs = ( self.mc_test_inputs*self.input_std_for_std + self.input_mean_for_std  )
+            self.mc_test_conditions[:,:-1] = ( self.mc_test_conditions[:,:-1]*self.condition_std_for_std + self.condition_mean_for_std  )
 
-        self.samples = ( self.samples*self.input_std_for_std + self.input_mean_for_std  )
+            self.samples = ( self.samples*self.input_std_for_std + self.input_mean_for_std  )
 
         # Now inverting the isolation transformation
         counter = 0
@@ -381,7 +388,7 @@ class Make_iso_continuous:
         self.iso_bigger_zero  = tensor > 0 
         self.iso_equal_zero   = tensor == 0
         #self.lowest_iso_value = torch.min( tensor[self.iso_bigger_zero] )
-        self.shift = 0.05
+        self.shift = 0.05 #era 0.05
         if( b ):
             self.shift = b
         self.n_zero_events = torch.sum( self.iso_equal_zero )
@@ -394,7 +401,7 @@ class Make_iso_continuous:
         # defining two masks to keep track of the events in the 0 peak and at the continous tails
         bigger_than_zero      = tensor  > 0
         tensor_zero           = tensor == 0
-        self.lowest_iso_value = 0 
+        self.lowest_iso_value = 0.0 #torch.min( tensor[ bigger_than_zero ] )
 
         tensor[ bigger_than_zero ] = tensor[ bigger_than_zero ] + self.shift -self.lowest_iso_value 
         tensor[ tensor_zero ]      = torch.tensor(np.random.triangular( left = 0. , mode = 0, right = self.shift*0.99, size = tensor[tensor_zero].size()[0]   ), dtype = tensor[ tensor_zero ].dtype )
