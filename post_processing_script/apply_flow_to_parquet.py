@@ -17,26 +17,26 @@ import utils as utils
 
 processes = ["Zee","Zmmg","Hgg","Diphoton","GJet"]
 
-var_list = [    "r9", 
-                "sieie",
-                "etaWidth",
-                "phiWidth",
-                "sieip",
-                "s4",
-                "hoe",
-                "ecalPFClusterIso",
-                "trkSumPtHollowConeDR03",
-                "trkSumPtSolidConeDR04",
-                "pfChargedIso",
-                "pfChargedIsoWorstVtx",
-                "esEffSigmaRR",
-                "esEnergyOverRawE",
-                "hcalPFClusterIso",
-                "energyErr"]
+var_list = [    "raw_r9", 
+                "raw_sieie",
+                "raw_etaWidth",
+                "raw_phiWidth",
+                "raw_sieip",
+                "raw_s4",
+                "raw_hoe",
+                "raw_ecalPFClusterIso",
+                "raw_trkSumPtHollowConeDR03",
+                "raw_trkSumPtSolidConeDR04",
+                "raw_pfChargedIso",
+                "raw_pfChargedIsoWorstVtx",
+                "raw_esEffSigmaRR",
+                "raw_esEnergyOverRawE",
+                "raw_hcalPFClusterIso",
+                "raw_energyErr"]
 
 conditions_list = [ "pt","ScEta","phi","fixedGridRhoAll"]
 
-systematic_list = [""]
+systematic_list = ["/"]
 
 def main():
 
@@ -46,7 +46,8 @@ def main():
     for systematic in systematic_list:
 
         # Reading the files as a dataframe
-        files = glob.glob( args.mcfilespath + systematic + "/*.parquet" )
+        files = glob.glob( args.mcfilespath ) #+ systematic + "/*.parquet" )
+        files = files[:150]
         if len(files) == 0:
             print( "\nSystematic ", systematic , " is not avaliable in the path: ", args.mcfilespath  )
             continue
@@ -56,6 +57,8 @@ def main():
         # concatenating the files
         mc  = [pd.read_parquet(f) for f in files]
         mc_df = pd.concat(mc,ignore_index=True)   
+
+        #mc_df = mc_df[:200000]
 
         # Making sure the process is correclty selected
         if( args.process is None ):
@@ -99,9 +102,10 @@ def main():
             mc_flow_conditions   = torch.tensor(  np.concatenate(  [np.array( mc_df[photon_type_conditions] ), 0*np.ones(  len(mc_df)  ).reshape(-1,1) ] , axis = 1  )  )
 
             # Now we proceed to the calculation of the corrections
-            flow = zuko.flows.NSF( mc_flow_inputs.size()[1] , context = mc_flow_conditions.size()[1], bins = 10,transforms = 5, hidden_features=[256] * 2)
+            flow = zuko.flows.NSF( mc_flow_inputs.size()[1] , context = mc_flow_conditions.size()[1], bins = 10,transforms = 6, hidden_features=[256] * 3, passes = 2)
             if( args.period == "postEE" ):
-                path_means_std = "./flow_models/postEE/"
+                path_means_std = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/results/configuration_v13_refact_test/"
+                path_means_std = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/results/configuration_v13_refact_test/"
                 flow.load_state_dict(torch.load( path_means_std + 'best_model_.pth', map_location=torch.device('cpu')))
             elif( args.period == "preEE" ):
                 path_means_std = "./flow_models/preEE/"
@@ -126,7 +130,7 @@ def main():
 
             # Adding the corrected entries to the df
             for i in range( len(var_list) ):
-                mc_df[ photon_type_inputs[i] + "_corr" ] =  corrected_inputs[:,i]
+                mc_df[ photon_type_inputs[i].replace("raw_","") + "_corr" ] =  corrected_inputs[:,i]
 
         # Now the corrected mvaID is calculated
         if( args.process == "Zee"  ):
@@ -148,7 +152,9 @@ def main():
                 mc_df[ "sigma_m_over_m_smeared_corr" ] = utils.calculate_corrected_smeared_sigma_m_over_m(mc_df)
 
         # Dumping the df file with the new entries
-        mc_df.to_parquet( args.outpath + "/zmmg_out.parquet")
+        mc_df.to_parquet( args.outpath + "/Zee_out_Fix.parquet")
+        print('\n\nFinished!\n')
+        exit()
 
 if __name__ == "__main__":
     
