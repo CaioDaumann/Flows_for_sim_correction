@@ -11,22 +11,22 @@ import xgboost
 
 # Names of the used variables, I copied it here only so it is easier to use it acess the labels and names of teh distirbutions
 var_list = ["probe_energyRaw",
-                "probe_r9_raw", 
-                "probe_sieie_raw",
-                "probe_etaWidth_raw",
-                "probe_phiWidth_raw",
-                "probe_sieip_raw",
-                "probe_s4_raw",
-                "probe_hoe_raw",
-                "probe_ecalPFClusterIso_raw",
-                "probe_trkSumPtHollowConeDR03_raw",
-                "probe_trkSumPtSolidConeDR04_raw",
-                "probe_pfChargedIso_raw",
-                "probe_pfChargedIsoWorstVtx_raw",
-                "probe_esEffSigmaRR_raw",
-                "probe_esEnergyOverRawE_raw",
-                "probe_hcalPFClusterIso_raw",
-                "probe_energyErr_raw"]
+                "probe_raw_r9", 
+                "probe_raw_sieie",
+                "probe_raw_etaWidth",
+                "probe_raw_phiWidth",
+                "probe_raw_sieip",
+                "probe_raw_s4",
+                "probe_raw_hoe",
+                "probe_raw_ecalPFClusterIso",
+                "probe_raw_trkSumPtHollowConeDR03",
+                "probe_raw_trkSumPtSolidConeDR04",
+                "probe_raw_pfChargedIso",
+                "probe_raw_pfChargedIsoWorstVtx",
+                "probe_raw_esEffSigmaRR",
+                "probe_raw_esEnergyOverRawE",
+                "probe_raw_hcalPFClusterIso",
+                "probe_raw_energyErr"]
 
 # some variables have value of zero in barrel, so we must exclude them. I created this matrix so it is easier to do that!
 var_list_matrix_barrel = ["probe_energyRaw",
@@ -187,23 +187,23 @@ def plot_distributions( path, data_df, mc_df, data_weights, mc_weights, variable
 
         for key in set:
 
-            mean = np.mean( np.array(data_df[key]) )
-            std  = np.std(  np.array(data_df[key]) )
+            mean = np.mean( np.nan_to_num(np.array(data_df[key.replace('_raw','')])) )
+            std  = np.std(  np.nan_to_num(np.array(data_df[key.replace('_raw','')])) )
 
             if( 'Iso' in key or 'DR' in key   ):
-                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 1.5))
-                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 1.5))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 1.5))
+                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
+                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
             elif( 'hoe' in  key ):
-                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 0.02))
-                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 0.02))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 0.02))
+                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
+                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
             else:
-                data_hist            = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
-                mc_hist              = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
+                data_hist            = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
 
-            data_hist.fill( np.array(data_df[key]   ) , weight = data_weights )
+            data_hist.fill( np.array(data_df[key.replace('_raw','')]   ) , weight = data_weights )
             
             if( len(weights_befores_rw)  ):
                 mc_hist.fill( np.array(  mc_df[key]), weight = weights_befores_rw )
@@ -214,7 +214,7 @@ def plot_distributions( path, data_df, mc_df, data_weights, mc_weights, variable
 
             mc_rw_hist.fill( np.array(mc_df[key]) , weight = mc_weights )
 
-            plott( data_hist , mc_hist, mc_rw_hist , 'plots/' +  str(key) +".png", xlabel = str(key)  )
+            plott( data_hist , mc_hist, mc_rw_hist , path +  str(key) +".png", xlabel = str(key)  )
 
 def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_weights, plot_path ):
 
