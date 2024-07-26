@@ -16,27 +16,12 @@ plt.style.use([mplhep.style.CMS])
 # importing other scripts
 import standalone_plot        as plot_utils
 import correlation_matrix_and_profile_plots as corr_plots
-#import zmmg_process_utils     as zmmg_utils
-#from   apply_flow_zmmg        import zmmg_kinematics_reweighting
 
+# For the paper with the IC the selection is performed in another script, so dont have to perform it again here
 def perform_zee_selection( data_df, mc_df ):
-    # first we need to calculathe the invariant mass of the electron pair
 
-    # variables names used to calculate the mass 
-    data_mass_vars = ["tag_pt","tag_ScEta","tag_phi","probe_pt","probe_ScEta","probe_phi","fixedGridRhoAll", "tag_mvaID"]
-    mass_vars      = ["tag_pt","tag_ScEta","tag_phi","probe_pt","probe_ScEta","probe_phi","fixedGridRhoAll", "tag_mvaID"]
-
-    mass_inputs_data = np.array( data_df[data_mass_vars]) 
-    mass_inputs_mc   = np.array( mc_df[mass_vars]  )
-
-    # calculaitng the invariant mass with the expression of a par of massless particles 
-    mass_data = np.array( data_df["mass"])  #np.sqrt(  2*mass_inputs_data[:,0]*mass_inputs_data[:,3]*( np.cosh(  mass_inputs_data[:,1] -  mass_inputs_data[:,4]  )  - np.cos( mass_inputs_data[:,2]  -mass_inputs_data[:,5] )  )  )
-    mass_mc   = np.array( mc_df["mass"]  )  #np.sqrt(  2*mass_inputs_mc[:,0]*mass_inputs_mc[:,3]*( np.cosh(  mass_inputs_mc[:,1] -  mass_inputs_mc[:,4]  )  - np.cos( mass_inputs_mc[:,2]  -mass_inputs_mc[:,5] )  )  )
-
-    # now, in order to perform the needed cuts two masks will be created
-    mask_data = np.logical_and( mass_data > 80 , mass_data < 100  )
-    
-    mask_mc   = np.logical_and( mass_mc > 80 , mass_mc < 100  )
+    mask_data = np.logical_and( data_df["mass"].values > 80 , data_df["mass"].values < 100  )
+    mask_mc   = np.logical_and( mc_df["mass"].values > 80 , mc_df["mass"].values < 100  )
 
     # return the masks for further operations
     return mask_data, mask_mc
@@ -105,130 +90,8 @@ def perform_reweighting(simulation_df, data_df):
     return data_weights, simulation_weights
 
 
-#Read the pytorch tensors stored by the readdata.py script
-"""
-var_list_corr = [   "probe_energyRaw",
-                    "probe_corr_r9", 
-                    "probe_corr_sieie",
-                    "probe_corr_etaWidth",
-                    "probe_corr_phiWidth",
-                    "probe_corr_sieip",
-                    "probe_corr_s4",
-                    "probe_corr_hoe",
-                    "probe_corr_ecalPFClusterIso",
-                    "probe_corr_trkSumPtHollowConeDR03",
-                    "probe_corr_trkSumPtSolidConeDR04",
-                    "probe_corr_pfChargedIso",
-                    "probe_corr_pfChargedIsoWorstVtx",
-                    "probe_corr_esEffSigmaRR",
-                    "probe_corr_esEnergyOverRawE",
-                    "probe_corr_hcalPFClusterIso",
-                    "probe_corr_energyErr",
-                    "sigma_m_over_m_corr",
-                    "probe_corr_mvaID_run3"]
-"""
 
-# For Pauls's validation
-
-"""
-var_list_corr = ["probe_energyRaw",
-                "probe_r9_corr", 
-                "probe_sieie_corr",
-                "probe_etaWidth_corr",
-                "probe_phiWidth_corr",
-                "probe_sieip_corr",
-                "probe_s4_corr",
-                "probe_hoe_corr",
-                "probe_ecalPFClusterIso_corr",
-                "probe_trkSumPtHollowConeDR03_corr",
-                "probe_trkSumPtSolidConeDR04_corr",
-                "probe_pfChargedIso_corr",
-                "probe_pfChargedIsoWorstVtx_corr",
-                "probe_esEffSigmaRR_corr",
-                "probe_esEnergyOverRawE_corr",
-                "probe_hcalPFClusterIso_corr",
-                "probe_energyErr_corr",
-                "probe_mvaID_corr",
-                "sigma_m_over_m_corr",
-                "probe_pt",
-                "probe_eta",
-                "fixedGridRhoAll"]
-
-
-data_var_list    = ["probe_energyRaw",
-                    "probe_r9", 
-                    "probe_sieie",
-                    "probe_etaWidth",
-                    "probe_phiWidth",
-                    "probe_sieip",
-                    "probe_s4",
-                    "probe_hoe",
-                    "probe_ecalPFClusterIso",
-                    "probe_trkSumPtHollowConeDR03",
-                    "probe_trkSumPtSolidConeDR04",
-                    "probe_pfChargedIso",
-                    "probe_pfChargedIsoWorstVtx",
-                    "probe_esEffSigmaRR",
-                    "probe_esEnergyOverRawE",
-                    "probe_hcalPFClusterIso",
-                    "probe_energyErr",
-                    "probe_mvaID",
-                    "sigma_m_over_m",
-                    "probe_pt",
-                    "probe_eta",
-                    "fixedGridRhoAll"
-                    ]
-
-var_list    = [ "probe_energyRaw",
-                "probe_r9", 
-                "probe_sieie",
-                "probe_etaWidth",
-                "probe_phiWidth",
-                "probe_sieip",
-                "probe_s4",
-                "probe_hoe",
-                "probe_ecalPFClusterIso",
-                "probe_trkSumPtHollowConeDR03",
-                "probe_trkSumPtSolidConeDR04",
-                "probe_pfChargedIso",
-                "probe_pfChargedIsoWorstVtx",
-                "probe_esEffSigmaRR",
-                "probe_esEnergyOverRawE",
-                "probe_hcalPFClusterIso",
-                "probe_energyErr",
-                "probe_mvaID",
-                "sigma_m_over_m",
-                "probe_pt",
-                "probe_eta",
-                "fixedGridRhoAll"
-                ]
-"""
-
-
-"""
-var_list_corr = ["probe_energyRaw",
-                "probe_pt", 
-                "probe_r9", 
-                "probe_sieie",
-                "probe_etaWidth",
-                "probe_phiWidth",
-                "probe_sieip",
-                "probe_s4",
-                "probe_hoe",
-                "probe_ecalPFClusterIso",
-                "probe_trkSumPtHollowConeDR03",
-                "probe_trkSumPtSolidConeDR04",
-                "probe_pfChargedIsoWorstVtx",
-                "probe_esEffSigmaRR",
-                "probe_esEnergyOverRawE",
-                "probe_hcalPFClusterIso",
-                "probe_mvaID",
-                "fixedGridRhoAll",
-                "probe_ScEta",
-                "probe_energyErr",
-                "probe_phi"]
-""" 
-
+# My post processing script has a diferrent naming w.r.t the HiggsDNA variables
 var_list_corr = ["probe_energyRaw",
                 "probe_pt", 
                 "probe_r9_corr", 
@@ -250,7 +113,6 @@ var_list_corr = ["probe_energyRaw",
                 "probe_ScEta",
                 "probe_energyErr_corr",
                 "probe_phi"]
-
 
 data_var_list    = ["probe_energyRaw",
                     "probe_pt", 
@@ -275,7 +137,6 @@ data_var_list    = ["probe_energyRaw",
                     "probe_phi"
                     ]
 
-
 var_list    = [ "probe_energyRaw",
                 "probe_pt", 
                 "probe_raw_r9", 
@@ -299,10 +160,8 @@ var_list    = [ "probe_energyRaw",
                 "probe_phi"
                 ]
 
-
 data_conditions_list = [ "probe_pt","probe_ScEta","probe_phi","fixedGridRhoAll"]
-conditions_list = [ "probe_pt","probe_ScEta","probe_phi","fixedGridRhoAll"]
-
+conditions_list      = [ "probe_pt","probe_ScEta","probe_phi","fixedGridRhoAll"]
 
 def read_data():
     
@@ -312,7 +171,6 @@ def read_data():
     data = [pd.read_parquet(f) for f in files]
     data_df = pd.concat(data,ignore_index=True)
 
-    #data_df["probe_energyErr"] = data_df["probe_energyErr"]/ data_df["probe_pt"]*np.cosh( data_df["probe_eta"] ) 
 
     postEE_files = glob.glob("../Zee_out_Fix_AR.parquet") 
     #preEE_files  = glob.glob("/net/scratch_cms3a/daumann/HiggsDNA/scripts/v13_runners/zee_files/Rerun_after_probe_selection/DY_preEE_v13/nominal/*.parquet")
@@ -330,11 +188,6 @@ def read_data():
     mc_df = postEE
     #mc_df = pd.concat([preEE, postEE], ignore_index=True)
     
-    #mc_df["probe_energyErr"]     = mc_df["probe_energyErr"]/ mc_df["probe_pt"]*np.cosh( mc_df["probe_eta"] )
-    #mc_df["probe_raw_energyErr"] = mc_df["probe_raw_energyErr"]/ mc_df["probe_pt"]*np.cosh( mc_df["probe_eta"] )
-    
-    print(  len(data_df) , len(mc_df) )
-    
     return data_df, mc_df
 
 def main():
@@ -346,41 +199,142 @@ def main():
     # performing the data selection!
     mask_data, mask_mc = perform_zee_selection( data_df, mc_df )
 
-    # This carries the corrected inputs
-    mc_df = mc_df[mask_mc]
-
+    mc_df, data_df  = mc_df[mask_mc], data_df[mask_data]
+    
+    data_vector    = np.array(data_df[data_var_list])
+    samples              = np.array( mc_df[var_list_corr]  )    
+    mc_vector = np.array(mc_df[var_list] )    
+    
+    data_test_weights    = np.ones( len(data_df["probe_r9"]))
     mc_test_weights      = np.array( mc_df["rw_weights"] )
     
-    data_df = data_df[mask_data]
-    data_vector = np.array(data_df[data_var_list])
-    data_test_weights    = np.ones( len(data_df["probe_r9"]))
+    # Normalizing the mc weights to data
     mc_test_weights      = len(data_test_weights)*mc_test_weights/np.sum(mc_test_weights)
 
-    samples              = np.array( mc_df[var_list_corr]  )
-    
+    # producing the correlation and profile plots
+    corr_plots.plot_correlation_matrices( torch.tensor(np.nan_to_num(np.array( data_vector )))[:5000000], torch.tensor(np.nan_to_num(np.array( mc_vector )))[:5000000], torch.tensor(np.nan_to_num( np.array(samples) ))[:5000000]  ,  torch.tensor(np.array(mc_test_weights[:5000000])), var_list, './plots_AR_model/')
+    corr_plots.plot_profile_barrel( nl_mva_ID = torch.tensor(mc_df["probe_mvaID_corr"].values), mc_mva_id = torch.tensor(mc_df["probe_mvaID_nano"].values) , mc_conditions = torch.tensor(mc_df[conditions_list].values) ,  data_mva_id = torch.tensor(data_df["probe_mvaID"].values), data_conditions = torch.tensor(data_df[conditions_list].values), mc_weights = mc_test_weights, data_weights = data_test_weights, path = './plots_AR_model/')
 
-    #mc_test_weights      = np.array( mc_df["weight"])
-    mc_vector = np.array(mc_df[var_list] )
-    
-    # As a first trick, we plot the diferrence in correlation wrt to data!
+    eta_regions = ['barrel', 'endcap']
+    eta_mc_masks   = [  np.abs(mc_df["probe_ScEta"]) < 1.442, np.abs(mc_df["probe_ScEta"]) > 1.566 ]
+    eta_data_masks = [  np.abs(data_df["probe_ScEta"]) < 1.442, np.abs(data_df["probe_ScEta"]) > 1.566 ] 
+    for entry, entry_corr, entry_data in zip(var_list, var_list_corr, data_var_list):
+        for eta_region, mc_eta_mask, data_eta_mask in zip(eta_regions, eta_mc_masks, eta_data_masks):
 
-    """ 
-    if(With_coupling_blocks):
-        if( PostEE_plots ):
-            plot_utils.plot_correlation_matrix_diference_barrel( torch.tensor(data_vector) , torch.tensor(np.array(data_df[conditions_list])), data_test_weights, torch.tensor(np.array(mc_df[var_list])) , torch.tensor(np.array(mc_df[conditions_list])), mc_test_weights, torch.tensor(np.array(mc_df[var_list_corr])) ,  './plots/coupling/postEE/')
-        else:
-            plot_utils.plot_correlation_matrix_diference_barrel( torch.tensor(data_vector) , torch.tensor(np.array(data_df[conditions_list])), data_test_weights, torch.tensor(np.array(mc_df[var_list])) , torch.tensor(np.array(mc_df[conditions_list])), mc_test_weights, torch.tensor(np.array(mc_df[var_list_corr])) ,  './plots/coupling/preEE/')
-    else:
-        if( PostEE_plots ):
-            plot_utils.plot_correlation_matrix_diference_barrel( torch.tensor(data_vector) , torch.tensor(np.array(data_df[conditions_list])), data_test_weights, torch.tensor(np.array(mc_df[var_list])) , torch.tensor(np.array(mc_df[conditions_list])), mc_test_weights, torch.tensor(np.array(mc_df[var_list_corr])) ,  './plots/postEE/')
-        else:
-            plot_utils.plot_correlation_matrix_diference_barrel( torch.tensor(data_vector) , torch.tensor(np.array(data_df[conditions_list])), data_test_weights, torch.tensor(np.array(mc_df[var_list])) , torch.tensor(np.array(mc_df[conditions_list])), mc_test_weights, torch.tensor(np.array(mc_df[var_list_corr])) ,  './plots/preEE/')
-    """
+            if eta_region == 'barrel':
+                endcap = False
+            else:
+                endcap = True
+            
+            # Lets calculate the data means and stds to define the plots ranges
+            mean = np.mean( np.nan_to_num( data_df[entry_data][data_eta_mask].values )  )
+            std  = np.std(  np.nan_to_num( data_df[entry_data][data_eta_mask].values )  )
 
-    corr_plots.plot_correlation_matrices( torch.tensor(np.nan_to_num(np.array( data_vector )))[:5000000], torch.tensor(np.nan_to_num(np.array( mc_vector )))[:5000000], torch.tensor(np.nan_to_num( np.array(samples) ))[:5000000]  ,  torch.tensor(np.array(mc_test_weights[:5000000])), var_list, './plots/')
-    corr_plots.plot_profile_barrel( nl_mva_ID = torch.tensor(mc_df["probe_mvaID_corr"].values), mc_mva_id = torch.tensor(mc_df["probe_mvaID_nano"].values) , mc_conditions = torch.tensor(mc_df[conditions_list].values) ,  data_mva_id = torch.tensor(data_df["probe_mvaID"].values), data_conditions = torch.tensor(data_df[conditions_list].values), mc_weights = mc_test_weights, data_weights = data_test_weights, path = './plots/')
-    #corr_plots.pt_profile_again(predictions, test, labels, path_to_plot, mc_weights, var='pt')
+            if std == 0:
+                std = 0.1
 
+            # Each histogram type will have different bpunding
+            if( 'Iso' in entry    ):
+                data_hist     = hist.new.Reg(30, 0.0, mean + 4.5*std, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(30, 0.0, mean + 4.5*std, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(30, 0.0, mean + 4.5*std, overflow=True).Weight() 
+            elif( 'es' in entry ):
+                data_hist     = hist.new.Reg(30, 0.0, mean + 2.8*std, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(30, 0.0, mean + 2.8*std, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(30, 0.0, mean + 2.8*std, overflow=True).Weight()           
+            elif( 'hoe' in entry ):
+                data_hist     = hist.new.Reg(30, 0.0, 0.08, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(30, 0.0, 0.08, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(30, 0.0, 0.08, overflow=True).Weight() 
+            elif( 'DR' in entry ):
+                data_hist     = hist.new.Reg(70, 0.0, 4.0, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(70, 0.0, 4.0, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(70, 0.0, 4.0, overflow=True).Weight()        
+            elif( 'energy' in entry ):
+                data_hist     = hist.new.Reg(36, 0.0, mean + 3.0*std, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(36, 0.0, mean + 3.0*std, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(36, 0.0, mean + 3.0*std, overflow=True).Weight() 
+            elif( 'pt' in entry or 'Rho' in entry):
+                data_hist     = hist.new.Reg(50, mean - 4*std, mean + 4*std, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(50, mean - 4*std, mean + 4*std, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(50, mean - 4*std, mean + 4*std, overflow=True).Weight() 
+            elif( 'eta' in entry and 'idth' not in entry ):
+                data_hist     = hist.new.Reg(50, -2.5, 2.5, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(50, -2.5, 2.5, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(50, -2.5, 2.5, overflow=True).Weight()    
+            elif( 'sieie' in entry  ):
+                data_hist     = hist.new.Reg(30, mean - 3.0*std, mean + 3.0*std, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(30, mean - 3.0*std, mean + 3.0*std, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(30, mean - 3.0*std, mean + 3.0*std, overflow=True).Weight()             
+            elif( 'sieip' in entry  ):
+                data_hist     = hist.new.Reg(30, mean - 3.0*std, mean + 3.0*std, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(30, mean - 3.0*std, mean + 3.0*std, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(30, mean - 3.0*std, mean + 3.0*std, overflow=True).Weight() 
+            elif( 'r9' in entry ):
+                data_hist     = hist.new.Reg(30, 0.5, mean + 1.5*std, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(30, 0.5, mean + 1.5*std, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(30, 0.5, mean + 1.5*std, overflow=True).Weight() 
+            elif(  's4' in entry ):    
+                data_hist     = hist.new.Reg(30, mean - 4.5*std, mean + 2.5*std, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(30, mean - 4.5*std, mean + 2.5*std, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(30, mean - 4.5*std, mean + 2.5*std, overflow=True).Weight() 
+            else:
+                data_hist     = hist.new.Reg(30, mean - 2.0*std, mean + 3.0*std, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(30, mean - 2.0*std, mean + 3.0*std, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(30, mean - 2.0*std, mean + 3.0*std, overflow=True).Weight() 
+
+            data_hist.fill(     np.array( np.array(data_df[entry_data][data_eta_mask] )) )
+            mc_hist.fill(       np.array( np.array(mc_df[entry][mc_eta_mask] ))        , weight = len( np.array(data_df[entry_data][data_eta_mask] ))*mc_test_weights[mc_eta_mask])
+            mc_corr_hist.fill(  np.array( np.array(mc_df[entry_corr][mc_eta_mask]))    , weight = len( np.array(data_df[entry_data][data_eta_mask] ))*mc_test_weights[mc_eta_mask])
+            
+            plot_utils.plott( data_hist, mc_hist,mc_corr_hist, f'./plots_AR_model/forPaper/{entry_data}_{eta_region}.pdf',  xlabel = str(entry.replace("_raw","").replace("_nano","")), postEE = True, endcap = endcap)
+
+
+            # Now only the mvaID
+            if( 'mvaID' in entry_data ):
+                
+                # plots for barrel and endcao
+                if(PostEE_plots):
+                    data_hist     = hist.new.Reg(40, -0.9, 1.0, overflow=True).Weight() 
+                    mc_hist       = hist.new.Reg(40, -0.9, 1.0, overflow=True).Weight() 
+                    mc_corr_hist  = hist.new.Reg(40, -0.9, 1.0, overflow=True).Weight() 
+                else:
+                    data_hist     = hist.new.Reg(40, -0.9, 1.0, overflow=True).Weight() 
+                    mc_hist       = hist.new.Reg(40, -0.9, 1.0, overflow=True).Weight() 
+                    mc_corr_hist  = hist.new.Reg(40, -0.9, 1.0, overflow=True).Weight() 
+
+                data_barrel_mask = np.abs(data_df["probe_ScEta"]) < 1.442
+                mc_barrel_mask   = np.abs(mc_df["probe_ScEta"]) < 1.442
+
+                #print( len(mc_barrel_mask ), len(mc_vector[:,i]), len(mc_test_weights) )
+                data_hist.fill(     np.array( np.array(data_df[entry_data][data_barrel_mask] )) )
+                mc_hist.fill(       np.array( np.array(mc_df[entry][mc_barrel_mask] ))   , weight = len( np.array(data_df[entry_data][data_barrel_mask] ))*mc_test_weights[mc_barrel_mask])
+                mc_corr_hist.fill(  np.array( np.array(mc_df[entry_corr][mc_barrel_mask]))  , weight = len( np.array(data_df[entry_data][data_barrel_mask] ))*mc_test_weights[mc_barrel_mask])
+
+                plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "./plots_AR_model/forPaper/barrel_" + entry_data + '.pdf',  xlabel = entry_data, postEE = True, endcap=False )
+
+                #################
+                # Now, endcap!
+                data_hist     = hist.new.Reg(40, -0.9, 1.0, overflow=True).Weight() 
+                mc_hist       = hist.new.Reg(40, -0.9, 1.0, overflow=True).Weight() 
+                mc_corr_hist  = hist.new.Reg(40, -0.9, 1.0, overflow=True).Weight() 
+
+                data_barrel_mask = np.abs(data_df["probe_ScEta"]) > 1.56
+                mc_barrel_mask   = np.abs(mc_df["probe_ScEta"])   > 1.56
+
+                data_hist.fill(     np.array( np.array(data_df[entry_data][data_barrel_mask] )) )
+                mc_hist.fill(       np.array( np.array(mc_df[entry][mc_barrel_mask] ))   , weight = len( np.array(data_df[entry_data][data_barrel_mask] ))*mc_test_weights[mc_barrel_mask])
+                mc_corr_hist.fill(  np.array( np.array(mc_df[entry_corr][mc_barrel_mask]))  , weight = len( np.array(data_df[entry_data][data_barrel_mask] ))*mc_test_weights[mc_barrel_mask])
+
+
+                plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "./plots_AR_model/forPaper/endcap_" + entry_data + '.pdf',  xlabel = entry_data, postEE = True, endcap=True )                
+
+
+
+    exit()
+    # old script from here below!
+
+    # Loop over the variables to produce the marginal plots
     for i in range( np.shape(samples)[1] ):
 
         mean = np.mean( np.nan_to_num(np.array( data_vector[:,i] ))  )
@@ -399,9 +353,9 @@ def main():
             mc_hist       = hist.new.Reg(30, 0.0, 0.08, overflow=True).Weight() 
             mc_corr_hist  = hist.new.Reg(30, 0.0, 0.08, overflow=True).Weight() 
         elif( 'DR' in str(var_list[i]) ):
-            data_hist     = hist.new.Reg(30, 0.0, 4.0, overflow=True).Weight() 
-            mc_hist       = hist.new.Reg(30, 0.0, 4.0, overflow=True).Weight() 
-            mc_corr_hist  = hist.new.Reg(30, 0.0, 4.0, overflow=True).Weight()        
+            data_hist     = hist.new.Reg(130, 0.0, 4.0, overflow=True).Weight() 
+            mc_hist       = hist.new.Reg(130, 0.0, 4.0, overflow=True).Weight() 
+            mc_corr_hist  = hist.new.Reg(130, 0.0, 4.0, overflow=True).Weight()        
         elif( 'energy' in str(var_list[i]) ):
             data_hist     = hist.new.Reg(36, 0.0, mean + 3.0*std, overflow=True).Weight() 
             mc_hist       = hist.new.Reg(36, 0.0, mean + 3.0*std, overflow=True).Weight() 
@@ -443,7 +397,6 @@ def main():
         else:
                 plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "./plots/preEE/" + str(var_list[i]) + '.pdf',  xlabel = str(var_list[i].replace("raw_","")), postEE = False, endcap=False )
 
-
         if( 'mvaID' in str(var_list[i]) ):
             
             # plots for barrel and endcao
@@ -463,7 +416,6 @@ def main():
             data_hist.fill(     np.array( np.array(data_vector[:,i][data_barrel_mask] )) )
             mc_hist.fill(       np.array( np.array(mc_vector[:,i][mc_barrel_mask] ))   , weight = len( np.array(data_vector[:,i][data_barrel_mask] ))*mc_test_weights[mc_barrel_mask])
             mc_corr_hist.fill(  np.array( np.array(samples[:,i][mc_barrel_mask]))  , weight = len( np.array(data_vector[:,i][data_barrel_mask] ))*mc_test_weights[mc_barrel_mask])
-
 
             if( PostEE_plots ):
                 plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "./plots_AR_model/postEE/barrel_" + str(var_list[i]) + '.pdf',  xlabel = str(var_list[i]), postEE = True, endcap=False )

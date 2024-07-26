@@ -78,8 +78,8 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
 
     print( 'Number of MC events after equiparing! ', len( mc_conditions ), ' Number of data events: ', len(data_conditions))
 
-    training_percent = 0.75
-    validation_percent = 0.05 + training_percent
+    training_percent = 0.7
+    validation_percent = 0.03 + training_percent
     testing_percet = 1 - training_percent - validation_percent
 
     # Now, the fun part! - Separating everyhting into trainnig, validation and testing datasets!
@@ -245,4 +245,3 @@ def read_zee_data(IsPostEE):
     print( 'Number of MC events: ', len(drell_yan_df[mask_mc] ), ' Number of data events: ', len(data_df[mask_data]))
     print('IsPostEE? ', IsPostEE)
     
-    #exit()

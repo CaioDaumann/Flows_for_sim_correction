@@ -102,10 +102,16 @@ def main():
             mc_flow_conditions   = torch.tensor(  np.concatenate(  [np.array( mc_df[photon_type_conditions] ), 0*np.ones(  len(mc_df)  ).reshape(-1,1) ] , axis = 1  )  )
 
             # Now we proceed to the calculation of the corrections
-            flow = zuko.flows.NSF( mc_flow_inputs.size()[1] , context = mc_flow_conditions.size()[1], bins = 10,transforms = 6, hidden_features=[256] * 3, passes = 2)
+            flow = zuko.flows.NSF( mc_flow_inputs.size()[1] , context = mc_flow_conditions.size()[1], bins = 10,transforms = 6, hidden_features=[256] * 3)#, passes = 2)
             if( args.period == "postEE" ):
-                path_means_std = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/results/configuration_v13_refact_test/"
-                path_means_std = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/results/configuration_v13_refact_test/"
+                
+                # Coupling blocks
+                #path_means_std = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/results/configuration_v13_refact_test/"
+                #path_means_std = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/results/configuration_v13_refact_test/"
+                
+                # Auto-regressive 
+                path_means_std = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/results/configuration_v13_refact_test_AR/"
+                
                 flow.load_state_dict(torch.load( path_means_std + 'best_model_.pth', map_location=torch.device('cpu')))
             elif( args.period == "preEE" ):
                 path_means_std = "./flow_models/preEE/"
@@ -152,7 +158,7 @@ def main():
                 mc_df[ "sigma_m_over_m_smeared_corr" ] = utils.calculate_corrected_smeared_sigma_m_over_m(mc_df)
 
         # Dumping the df file with the new entries
-        mc_df.to_parquet( args.outpath + "/Zee_out_Fix.parquet")
+        mc_df.to_parquet( args.outpath + "/Zmmg_out_Fix_AR.parquet")
         print('\n\nFinished!\n')
         exit()
 

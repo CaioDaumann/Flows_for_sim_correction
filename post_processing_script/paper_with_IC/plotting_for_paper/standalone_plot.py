@@ -179,7 +179,9 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
     ax[0].tick_params(labelsize=22)
 
     #log scale for Iso variables
-    if( "Iso" in str(xlabel) or "DR" in str(xlabel) or "esE" in str(xlabel)   ): # or 'r9' in str(xlabel) or 's4' in str(xlabel)
+    #if ('ecal' not in str(xlabel) or 'hcal' not in str(xlabel) ):
+    #    pass
+    if( "Iso" in str(xlabel) or "DR" in str(xlabel) or "esE" in str(xlabel)  ): # or 'r9' in str(xlabel) or 's4' in str(xlabel)
         ax[0].set_yscale('log')
         #ax[0].set_ylim(0.001,( np.max(data_hist)/1.5e6 ))
         ax[0].set_ylim(0.001, 12.05*ax[0].get_ylim()[1])
@@ -292,16 +294,16 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
     ax[0].legend(handles=handles, labels=labels, loc="upper right", fontsize=20)
 
     ax[0].text(0.05, 0.96, r'$\mathcal{Z}\rightarrow e^{+}e^{-}$', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
-    if( 'mva' in xlabel ):
-        if( endcap ):
+    #if( 'mva' in xlabel ):
+    if( endcap ):
             #ax[0].text(0.05, 0.95, r'|$\eta$| > 1.566', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
             ax[0].text(0.05, 0.9, r'EE photons', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
-        else:
+    else:
             ax[0].text(0.05, 0.90, r'EB photons', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
             #ax[0].text(0.05, 0.95, r'|$\eta$| < 1.442', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
-    else:
-        ax[0].text(0.05, 0.9, r'EB+EE photons', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
-        #ax[0].text(0.05, 0.95, r'|$\eta$| < 2.5', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
+    #else:
+    #ax[0].text(0.05, 0.9, r'EB+EE photons', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
+    #ax[0].text(0.05, 0.95, r'|$\eta$| < 2.5', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
 
     #mplhep.cms.text( loc = 1, ax = ax[0],  )
  
