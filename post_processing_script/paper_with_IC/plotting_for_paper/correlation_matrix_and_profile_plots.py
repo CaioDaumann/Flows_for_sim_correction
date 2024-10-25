@@ -7,6 +7,9 @@ plt.style.use([mplhep.style.CMS])
 import mplhep as hep
 import xgboost
 from matplotlib.lines import Line2D
+import seaborn as sns
+import pandas as pd
+import corner
 
 # Converting covariance to correlation matrices
 def cov_to_corr(cov_matrix):
@@ -362,3 +365,205 @@ def plot_profile_barrel( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data
         plot_mvaID_profile_barrel( nl_mva_ID_ ,mc_mva_id_ ,mc_conditions_[:,1],data_mva_id_ ,data_conditions_[:,1],mc_weights_ ,data_weights_  , path, var = 'eta' , IsBarrel = IsBarrel)
         plot_mvaID_profile_barrel( nl_mva_ID_[mc_eta_mask] ,mc_mva_id_[mc_eta_mask] ,mc_conditions_[mc_eta_mask][:,2],data_mva_id_[data_eta_mask] ,data_conditions_[data_eta_mask][:,2],mc_weights_[mc_eta_mask] ,data_weights_[data_eta_mask]  , path ,var = 'phi' , IsBarrel = IsBarrel)
         plot_mvaID_profile_barrel( nl_mva_ID_[mc_eta_mask] ,mc_mva_id_[mc_eta_mask] ,mc_conditions_[mc_eta_mask][:,3],data_mva_id_[data_eta_mask] ,data_conditions_[data_eta_mask][:,3],mc_weights_[mc_eta_mask] ,data_weights_[data_eta_mask]  , path ,var = 'rho' , IsBarrel = IsBarrel)
+        
+        
+#plot the diference in correlations betwenn mc and data and data and flow
+def plot_nominal_correlation_matrices(data,mc,mc_corrected, mc_weights, var_names, path):
+
+    # Making the plot for barrel and end-cap
+    eta_regions    = ['barrel', 'endcap']
+    eta_mc_masks   = [  np.abs(mc[:,-3]) < 1.442, np.abs(mc[:,-3]) > 1.566 ]
+    eta_data_masks = [  np.abs(data[:,-3]) < 1.442, np.abs(data[:,-3]) > 1.566 ] 
+
+    for eta_region, mc_eta_mask, data_eta_mask in zip(eta_regions, eta_mc_masks, eta_data_masks):
+
+        # lets not use all ...
+        if 'barrel' in eta_region:
+            data_  = torch.cat( [data[:,2:-8][data_eta_mask], data[:,-6][data_eta_mask].view(-1,1) ], axis = 1)
+            mc_    = torch.cat( [mc[:,2:-8][mc_eta_mask], mc[:,-6][mc_eta_mask].view(-1,1)  ] , axis =1)
+            mc_corrected_ = torch.cat( [mc_corrected[:,2:-8][mc_eta_mask], mc_corrected[:,-6][mc_eta_mask].view(-1,1)], axis =1 )
+            mc_weights_   = mc_weights[mc_eta_mask]
+            var_names_ = var_names[2:-8] + [var_names[-6]] 
+        else:
+            data_ = data[:,2:-5][data_eta_mask]
+            mc_ = mc[:,2:-5][mc_eta_mask]
+            mc_corrected_ = mc_corrected[:,2:-5][mc_eta_mask]
+            mc_weights_ = mc_weights[mc_eta_mask]
+            var_names_ = var_names[2:-5]
+        
+        mc_weights_ = len(data_)*mc_weights_/torch.sum(mc_weights_)
+
+        #calculating the covariance matrix of the pytorch tensors
+        data_cov         = torch.cov( data_.T  )
+        mc_cov          = torch.cov( mc_.T           , aweights = torch.Tensor( abs(mc_weights_)  ))
+        mc_corrected_cov = torch.cov( mc_corrected_.T , aweights = torch.Tensor( abs(mc_weights_)  ))
+
+        #from covariance to correlation matrices
+        #data_corr         = torch.inverse( torch.sqrt( torch.diag_embed( torch.diag(data_corr))) ) @ data_corr @  torch.inverse( torch.sqrt(torch.diag_embed(torch.diag(data_corr))) ) 
+        #mc_corr           = torch.inverse( torch.sqrt( torch.diag_embed( torch.diag(mc_corr)) )) @ mc_corr @  torch.inverse( torch.sqrt(torch.diag_embed(torch.diag(mc_corr))) ) 
+        #mc_corrected_corr = torch.inverse( torch.sqrt( torch.diag_embed( torch.diag(mc_corrected_corr)) )) @ mc_corrected_corr @  torch.inverse( torch.sqrt(torch.diag_embed(torch.diag(mc_corrected_corr))) ) 
+        
+        data_corr = cov_to_corr(data_cov)
+        mc_corr = cov_to_corr(mc_cov)
+        mc_corrected_corr = cov_to_corr(mc_corrected_cov)
+
+        # matrices setup ended! Now plotting part!
+        fig, ax = plt.subplots(figsize=(41,41))
+        cax = ax.matshow( 100*( data_corr ), cmap = 'bwr', vmin = -50, vmax = 50)
+        cbar = fig.colorbar(cax,fraction=0.046, pad=0.04)
+        cbar.ax.tick_params(labelsize = 70)
+        cbar.set_label(r'Difference in correlation coefficient $[\%]$', rotation=90, loc = 'center', fontsize = 110, labelpad=60)
+
+        # ploting the cov matrix values
+        factors_sum = 0
+        mean,count = 0,0
+        for (i, j), z in np.ndenumerate( 100*( data_corr )):
+            mean = mean + abs(z)
+            count = count + 1
+            factors_sum = factors_sum + abs(z)
+            if( abs(z) < 1  ):
+                pass
+            else:
+                ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 65)    
+        
+        ax.yaxis.labelpad = 20
+        ax.xaxis.labelpad = 20
+        mean = mean/count
+        #ax.set_xlabel(r'$100 \cdot (Corr^{Data}[X_{i},X_{J}] - Corr^{Simulation^{Corr}}[X_{i},X_{J}]) $ ' , loc = 'center' ,fontsize = 100, labelpad=40)
+        plt.title( r'$\rho$(data) - $\rho$(corrected simulation)' + f' [{eta_region}]', fontweight='bold', fontsize = 130 , pad = 60 )
+        
+        ax.set_xticks(np.arange(len(var_names_)))
+        ax.set_yticks(np.arange(len(var_names_)))
+        
+        # Apply the replace method to each element of the list
+        cleaned_var_names = [name.replace("probe_", "").replace("raw_", "").replace("trkSum","").replace("ChargedIso","").replace("es","").replace("Cone","").replace("PF","").replace("Over","") for name in var_names_]
+         
+        ax.set_xticklabels(cleaned_var_names, fontsize = 50 , rotation=90 )
+        ax.set_yticklabels(cleaned_var_names, fontsize = 50 , rotation=0  )
+
+        # Add text below the plot
+        plt.figtext(0.5, 0.04, f'Mean Absolute Sum of Coefficients - {round(factors_sum/(2.*count),2)}', ha="center", fontsize= 85)
+
+        ax.tick_params(axis='both', which='major', pad=30)
+        plt.tight_layout()
+
+        plt.savefig(path + f'/data_correlation_matrix_{eta_region}.pdf')
+
+        ####################################
+        # Nominal MC vs Data
+        #####################################
+        fig, ax = plt.subplots(figsize=(41,41))
+        cax = ax.matshow( 100*( mc_corr ), cmap = 'bwr', vmin = -50, vmax = 50)
+        cbar = fig.colorbar(cax,fraction=0.046, pad=0.04)
+        cbar.ax.tick_params(labelsize = 90)
+        cbar.set_label(r'Difference in correlation coefficient $[\%]$', rotation=90, loc = 'center', fontsize = 110,labelpad=60)
+        
+        #ploting the cov matrix values
+        factors_sum = 0
+        mean,count = 0,0
+        for (i, j), z in np.ndenumerate( 100*( mc_corr )):
+            mean = mean + abs(z)
+            count = count + 1
+            factors_sum = factors_sum + abs(z)
+            if( abs(z) < 1  ):
+                pass
+            else:
+                ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 55)    
+        
+        mean = mean/count
+        #ax.set_xlabel(r'$100 \cdot  (Corr^{Data}[X_{i},X_{J}] - Corr^{Simulation}[X_{i},X_{J}]) $ ' , loc = 'center' ,fontsize = 100, labelpad=40)
+        plt.title( r'$\rho$(data) - $\rho$(nominal simulation)' + f' [{eta_region}]',fontweight='bold', fontsize = 140 , pad = 60 )
+        
+        ax.set_xticks(np.arange(len(var_names_)))
+        ax.set_yticks(np.arange(len(var_names_)))
+            
+        ax.set_xticklabels(cleaned_var_names, fontsize = 50 , rotation=90 )
+        ax.set_yticklabels(cleaned_var_names, fontsize = 50 , rotation=0  )
+
+        # Add text below the plot
+        plt.figtext(0.5, 0.04, f'Mean Absolute Sum of Coefficients - {round(factors_sum/(2.*count),2)}', ha="center", fontsize= 85)
+
+        ax.tick_params(axis='both', which='major', pad=30)
+        plt.tight_layout()
+
+        plt.savefig(path + f'/simulation_correlation_matrix_{eta_region}.pdf')
+        
+# test DR03 and DR04 correlations
+def scatter_plot( mc_df,  data_df, mc_weights, data_weights, path = './plots_AR_model/'):
+    
+    mc_DR_03      = mc_df["probe_raw_trkSumPtHollowConeDR03"].to_numpy()[:1000000]
+    mc_DR_04      = mc_df["probe_raw_trkSumPtSolidConeDR04"].to_numpy()[:1000000]
+    
+    data_dr_03         = data_df["probe_trkSumPtHollowConeDR03"].to_numpy()[:1000000]
+    data_dr_04    = data_df["probe_trkSumPtSolidConeDR04"].to_numpy()[:1000000]
+    
+    mc_DR_03_corr = mc_df["probe_trkSumPtHollowConeDR03_corr"].to_numpy()[:1000000]
+    mc_DR_04_corr = mc_df["probe_trkSumPtSolidConeDR04_corr"].to_numpy()[:1000000]
+    
+    # Create a figure with two subplots
+    fig, axs = plt.subplots(1, 3, figsize=(14, 6))
+
+    # Scatter plot for mc_DR_03 vs data
+    axs[0].scatter(mc_DR_03, mc_DR_04, alpha=0.5, color='blue', s = 8)
+    axs[0].set_title('Nominal')
+    axs[0].set_xlabel('mc_DR_03')
+    axs[0].set_ylabel('data')
+    axs[0].set_xlim(0, 5)
+    axs[0].set_ylim(0, 5)
+
+    axs[1].scatter(mc_DR_03_corr, mc_DR_04_corr, alpha=0.5, color='green', s = 8)
+    axs[1].set_title('Corrected')
+    axs[1].set_xlabel('mc_DR_03_corr')
+    axs[1].set_ylabel('data')
+    axs[1].set_xlim(0, 5)
+    axs[1].set_ylim(0, 5)
+
+    # Scatter plot for mc_DR_03_corr vs data
+    axs[2].scatter(data_dr_03, data_dr_04, alpha=0.5, color='green', s = 8)
+    axs[2].set_title('Data')
+    axs[2].set_xlabel('mc_DR_03_corr')
+    axs[2].set_ylabel('data')
+    axs[2].set_xlim(0, 5)
+    axs[2].set_ylim(0, 5)
+
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+    #plt.savefig(path + f'/DR_scatter_plot.pdf')
+
+
+    # Combine the two arrays into a single array of shape (5000, 2)
+    mc = np.vstack((mc_DR_03, mc_DR_04)).T
+    mc_corr = np.vstack((mc_DR_03_corr, mc_DR_04_corr)).T
+    data = np.vstack((data_dr_03, data_dr_04)).T
+
+    # Define the range for each parameter
+    x_range = (0, 2)  # Example range for DR 03 corr
+    y_range = (0, 2)  # Example range for DR 04 corr
+
+    # Create the corner plot with specified ranges
+    figure = corner.corner(mc, 
+                        labels=["DR 03 corr", "DR 04 corr"], 
+                        show_titles=True, 
+                        title_fmt=".2f", 
+                        range=[x_range, y_range]
+                        )
+ 
+    fig2 = corner.corner(data, 
+                            labels=["DR 03 corr", "DR 04 corr"], 
+                            show_titles=True, 
+                            title_fmt=".2f", 
+                            fig = figure,
+                            color = 'red',
+                            range=[x_range, y_range]
+                            )
+     
+    corner.corner(mc_corr, 
+                                labels=["DR 03 corr", "DR 04 corr"], 
+                                show_titles=True, 
+                                title_fmt=".2f", 
+                                fig = fig2,
+                                color = 'green',
+                                range=[x_range, y_range]
+                                ) 
+           
+    plt.savefig(path + f'/DR_corner_plot.pdf')

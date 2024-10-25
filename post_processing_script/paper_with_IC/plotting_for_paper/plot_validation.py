@@ -212,8 +212,10 @@ def main():
     mc_test_weights      = len(data_test_weights)*mc_test_weights/np.sum(mc_test_weights)
 
     # producing the correlation and profile plots
+    corr_plots.plot_nominal_correlation_matrices( torch.tensor(np.nan_to_num(np.array( data_vector )))[:5000000], torch.tensor(np.nan_to_num(np.array( mc_vector )))[:5000000], torch.tensor(np.nan_to_num( np.array(samples) ))[:5000000]  ,  torch.tensor(np.array(mc_test_weights[:5000000])), var_list, './plots_AR_model/')
     corr_plots.plot_correlation_matrices( torch.tensor(np.nan_to_num(np.array( data_vector )))[:5000000], torch.tensor(np.nan_to_num(np.array( mc_vector )))[:5000000], torch.tensor(np.nan_to_num( np.array(samples) ))[:5000000]  ,  torch.tensor(np.array(mc_test_weights[:5000000])), var_list, './plots_AR_model/')
     corr_plots.plot_profile_barrel( nl_mva_ID = torch.tensor(mc_df["probe_mvaID_corr"].values), mc_mva_id = torch.tensor(mc_df["probe_mvaID_nano"].values) , mc_conditions = torch.tensor(mc_df[conditions_list].values) ,  data_mva_id = torch.tensor(data_df["probe_mvaID"].values), data_conditions = torch.tensor(data_df[conditions_list].values), mc_weights = mc_test_weights, data_weights = data_test_weights, path = './plots_AR_model/')
+    corr_plots.scatter_plot( mc_df = mc_df,  data_df = data_df, mc_weights = mc_test_weights, data_weights = data_test_weights, path = './plots_AR_model/')
 
     eta_regions = ['barrel', 'endcap']
     eta_mc_masks   = [  np.abs(mc_df["probe_ScEta"]) < 1.442, np.abs(mc_df["probe_ScEta"]) > 1.566 ]
