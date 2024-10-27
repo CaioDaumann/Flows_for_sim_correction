@@ -216,14 +216,14 @@ def plot_distributions( path, data_df, mc_df, data_weights, mc_weights, variable
 
             plott( data_hist , mc_hist, mc_rw_hist , path +  str(key) +".png", xlabel = str(key)  )
 
-def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_weights, plot_path ):
+def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_weights, plot_path, variables_list ):
 
     for i in range( np.shape( data_tensor )[1] ):
 
             mean = np.mean( np.array(data_tensor[:,i]) )
             std  = np.std(  np.array(data_tensor[:,i]) )
 
-            if( 'Iso' in str(var_list[i]) or 'DR' in str(var_list[i]) or 'esE' in str(var_list[i]) or 'hoe' in str(var_list[i]) or 'energy' in str(var_list[i])  ):
+            if( 'Iso' in str(variables_list[i]) or 'DR' in str(variables_list[i]) or 'esE' in str(variables_list[i]) or 'hoe' in str(variables_list[i]) or 'energy' in str(variables_list[i])  ):
                 data_hist            = hist.Hist(hist.axis.Regular(50, 0.0 , mean + 2.0*std))
                 mc_hist              = hist.Hist(hist.axis.Regular(50, 0.0 , mean + 2.0*std))
                 mc_rw_hist           = hist.Hist(hist.axis.Regular(50, 0.0 , mean + 2.0*std))
@@ -232,7 +232,7 @@ def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_wei
                 mc_hist              = hist.Hist(hist.axis.Regular(50, mean - 2.5*std, mean + 2.5*std))
                 mc_rw_hist           = hist.Hist(hist.axis.Regular(50, mean - 2.5*std, mean + 2.5*std))
 
-            if( 'DR04' in str(var_list[i])  ):
+            if( 'DR04' in str(variables_list[i])  ):
                 data_hist            = hist.Hist(hist.axis.Regular(50, 0.0 , 5.0))
                 mc_hist              = hist.Hist(hist.axis.Regular(50, 0.0 , 5.0))
                 mc_rw_hist           = hist.Hist(hist.axis.Regular(50, 0.0 , 5.0))
@@ -241,7 +241,7 @@ def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_wei
             mc_hist.fill(  np.array( mc_tensor[:,i]),  weight = 1e6*mc_weights )
             mc_rw_hist.fill( np.array( flow_samples[:,i]) , weight = 1e6*mc_weights )
 
-            plott( data_hist , mc_hist, mc_rw_hist , plot_path +  str(var_list[i]) +".png", xlabel = str(var_list[i])  )
+            plott( data_hist , mc_hist, mc_rw_hist , plot_path +  str(variables_list[i]) +".png", xlabel = str(variables_list[i])  )
 
 def plot_loss_cruve(training,validation, plot_path):
 
@@ -392,8 +392,137 @@ def plot_distributions_after_transformations(training_inputs, training_condition
                 plott( data_hist , mc_hist, mc_hist , 'plots/validation_plots/transformation/after_transform_' +  str(var_list[i]) +".png", xlabel = str(var_list[i])  )
 
 
-# Down here are some ploting functions I still need to implement!
-def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,mc , mc_conditions,mc_weights,mc_corrected,path):
+def plot_correlation_matrix_diference_barrel(
+    var_list_barrel_only, 
+    match_indices_barrel,
+    data, 
+    data_conditions,
+    data_weights,
+    mc, 
+    mc_conditions,
+    mc_weights,
+    mc_corrected,
+    path
+):
+    """
+    Plots the differences between the correlation matrices of data and Monte Carlo (MC) samples 
+    in the barrel region.
+
+    Parameters:
+    - var_list_barrel_only: List[str]
+        Variable names for the barrel region.
+    - match_indices_barrel: List[int]
+        Indices of variables corresponding to the barrel region.
+    - data: np.ndarray
+        Data samples (events x variables).
+    - data_conditions: np.ndarray
+        Conditions or event-level parameters for the data.
+    - data_weights: np.ndarray
+        Weights for data events.
+    - mc: np.ndarray
+        MC samples.
+    - mc_conditions: np.ndarray
+        Conditions or event-level parameters for the MC.
+    - mc_weights: np.ndarray
+        Weights for MC events.
+    - mc_corrected: np.ndarray
+        Corrected MC samples.
+    - path: str
+        Directory where the plots will be saved.
+    """
+
+    # Remove 'probe_' prefix from variable names
+    var_list_barrel_only = [var.replace('probe_', '').replace('Cone', '').replace('trk', '').replace('Pt', '').replace('Charged', '').replace('Cluster', '') for var in var_list_barrel_only]
+
+    # Apply barrel-only condition (|eta| < 1.4222)
+    barrel_eta_cut = 1.4222
+    mask_data = np.abs(data_conditions[:, 1]) < barrel_eta_cut
+    mask_mc = np.abs(mc_conditions[:, 1]) < barrel_eta_cut
+
+    # Apply the barrel condition to the data
+    data = data[mask_data]
+    data_weights = data_weights[mask_data]
+
+    # Apply the barrel condition to the MC samples
+    mc = mc[mask_mc]
+    mc_weights = mc_weights[mask_mc]
+    mc_corrected = mc_corrected[mask_mc]
+
+    # Select only the variables related to barrel variables
+    data = data[:, match_indices_barrel]
+    mc = mc[:, match_indices_barrel]
+    mc_corrected = mc_corrected[:, match_indices_barrel]
+
+    # Handle negative weights by taking absolute values
+    data_weights_abs = np.abs(data_weights)
+    mc_weights_abs = np.abs(mc_weights)
+
+    # Function to compute weighted covariance matrix
+    def weighted_covariance(X, weights):
+        average = np.average(X, axis=0, weights=weights)
+        X_centered = X - average
+        cov = np.cov(X_centered, rowvar=False, aweights=weights)
+        return cov
+
+    # Compute weighted covariance matrices
+    data_cov = weighted_covariance(data, data_weights_abs)
+    mc_cov = weighted_covariance(mc, mc_weights_abs)
+    mc_corrected_cov = weighted_covariance(mc_corrected, mc_weights_abs)
+
+    # Convert covariance matrices to correlation matrices
+    def covariance_to_correlation(cov):
+        diag = np.sqrt(np.diag(cov))
+        outer_diag = np.outer(diag, diag)
+        corr = cov / outer_diag
+        corr[cov == 0] = 0
+        return corr
+
+    data_corr = covariance_to_correlation(data_cov)
+    mc_corr = covariance_to_correlation(mc_cov)
+    mc_corrected_corr = covariance_to_correlation(mc_corrected_cov)
+
+    # Helper function to plot difference matrices
+    def plot_difference_matrix(diff_matrix, variable_names, xlabel, output_filename):
+        fig, ax = plt.subplots(figsize=(20, 20))
+        cax = ax.matshow(100 * diff_matrix, cmap='bwr', vmin=-5, vmax=5)
+        fig.colorbar(cax)
+
+        mean_diff = np.mean(np.abs(diff_matrix)) * 100
+
+        for (i, j), z in np.ndenumerate(100 * diff_matrix):
+            if abs(z) >= 1:
+                ax.text(j, i, f'{z:.1f}', ha='center', va='center', fontsize=20)
+
+        ax.set_xticks(np.arange(len(variable_names)))
+        ax.set_yticks(np.arange(len(variable_names)))
+        ax.set_xticklabels(variable_names, fontsize=25, rotation=90)
+        ax.set_yticklabels(variable_names, fontsize=25)
+        ax.set_xlabel(f'{xlabel} - Metric: {mean_diff:.2f}', loc = 'center', fontsize=30)
+
+        plt.tight_layout()
+        plt.savefig(output_filename)
+        plt.close()
+
+    # Plotting difference between data and corrected MC correlation matrices
+    diff_corr_corrected = data_corr - mc_corrected_corr
+    plot_difference_matrix(
+        diff_matrix=diff_corr_corrected,
+        variable_names=var_list_barrel_only,
+        xlabel='(Corr_MC_Corrected - Corr_Data)',
+        output_filename=f'{path}/correlation_matrix_corrected_barrel.png'
+    )
+
+    # Plotting difference between data and uncorrected MC correlation matrices
+    diff_corr = data_corr - mc_corr
+    plot_difference_matrix(
+        diff_matrix=diff_corr,
+        variable_names=var_list_barrel_only,
+        xlabel='(Corr_MC - Corr_Data)',
+        output_filename=f'{path}/correlation_matrix_barrel.png'
+    )
+
+# Old one, exclude if the above one works!!
+def plot_correlation_matrix_diference_barrel__(var_list_barrel_only ,data, data_conditions,data_weights,mc , mc_conditions,mc_weights,mc_corrected,path):
 
     # lets do this for barrel only for now ...
     mask_mc,mask_data = np.abs(mc_conditions[:,1]) < 1.4222, np.abs(data_conditions[:,1]) < 1.4222
@@ -448,11 +577,11 @@ def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,
     
     #var_list_matrix_barrel=var_list_matrix_barrel.replace('probe_', '')
 
-    ax.set_xticks(np.arange(len(var_list_matrix_barrel)-1))
-    ax.set_yticks(np.arange(len(var_list_matrix_barrel)-1))
+    ax.set_xticks(np.arange(len(var_list_barrel_only)-1))
+    ax.set_yticks(np.arange(len(var_list_barrel_only)-1))
     
-    ax.set_xticklabels(var_list_matrix_barrel[1:],fontsize = 45 ,rotation=90)
-    ax.set_yticklabels(var_list_matrix_barrel[1:],fontsize = 45 ,rotation=0)
+    ax.set_xticklabels(var_list_barrel_only[1:],fontsize = 45 ,rotation=90)
+    ax.set_yticklabels(var_list_barrel_only[1:],fontsize = 45 ,rotation=0)
 
 
     plt.savefig(path + '/correlation_matrix_corrected_barrel.png')
@@ -472,16 +601,15 @@ def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,
             ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 60)  
     mean = mean/count   
 
-    ax.set_xticks(np.arange(len(var_list_matrix_barrel)-1))
-    ax.set_yticks(np.arange(len(var_list_matrix_barrel)-1))
+    ax.set_xticks(np.arange(len(var_list_barrel_only)-1))
+    ax.set_yticks(np.arange(len(var_list_barrel_only)-1))
     
-    ax.set_xticklabels(var_list_matrix_barrel[1:],fontsize = 45,rotation=90)
-    ax.set_yticklabels(var_list_matrix_barrel[1:],fontsize = 45,rotation=0)
+    ax.set_xticklabels(var_list_barrel_only[1:],fontsize = 45,rotation=90)
+    ax.set_yticklabels(var_list_barrel_only[1:],fontsize = 45,rotation=0)
 
     ax.set_xlabel(r'(Corr_MC-Corr_data  - Metric: ' + str(mean), loc = 'center' ,fontsize = 70)
 
     plt.savefig(path + '/correlation_matrix_barrel.png')
-
 
 def plot_correlation_matrix_diference_endcap(data, data_conditions,data_weights,mc , mc_conditions,mc_weights,mc_corrected,path):
 

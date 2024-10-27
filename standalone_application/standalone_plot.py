@@ -28,6 +28,7 @@ var_list = ["probe_energyRaw",
             "probe_hcalPFClusterIso",
             "probe_energyErr"]
 
+
 # some variables have value of zero in barrel, so we must exclude them. I created this matrix so it is easier to do that!
 var_list_matrix_barrel = ["probe_energyRaw",
             "probe_r9", 
@@ -313,14 +314,14 @@ def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_condit
     mc_mvaID   = 1 - (2/(1+np.exp( 2*mc_mvaID )))
 
     # Lets not do this one for now!
-    #plot_profile_barrel( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
+    plot_profile_barrel( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path, zmmg = zmmg)
 
     # now, we create and fill the histograms with the mvaID distributions
     
     if( zmmg ):
-        mc_mva      = hist.Hist(hist.axis.Regular(12, -0.9, 1.0))
-        nl_mva      = hist.Hist(hist.axis.Regular(12, -0.9, 1.0))
-        data_mva    = hist.Hist(hist.axis.Regular(12, -0.9, 1.0))
+        mc_mva      = hist.Hist(hist.axis.Regular(4, -0.9, 1.0))
+        nl_mva      = hist.Hist(hist.axis.Regular(4, -0.9, 1.0))
+        data_mva    = hist.Hist(hist.axis.Regular(4, -0.9, 1.0))
     else:
         mc_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
         nl_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
@@ -430,13 +431,14 @@ def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,
     energy_err_mc = mc[:,-1:]
     energy_err_mc_corrected = mc_corrected[:,-1:]
 
-    mc           = mc[:,: int( data.size()[1]  -4 ) ]
-    mc_corrected = mc_corrected[:,: int( data.size()[1]  -4 ) ]
-    data         = data[:,: int( data.size()[1]  -4 ) ]
+    mc           = mc[:,1: int( data.size()[1]  -4 ) ]
+    mc_corrected = mc_corrected[:,1: int( data.size()[1]  -4 ) ]
+    data         = data[:,1: int( data.size()[1]  -4 ) ]
 
-    data = torch.cat( [  data, energy_err_data .view(-1,1)  ], axis = 1 )
-    mc = torch.cat( [  mc, energy_err_mc .view(-1,1)  ], axis = 1 )
-    mc_corrected = torch.cat( [  mc_corrected, energy_err_mc_corrected .view(-1,1)  ], axis = 1 )
+    # Lets only use the mvaID inputs in the correlation matrix!
+    #data = torch.cat( [  data, energy_err_data .view(-1,1)  ], axis = 1 )
+    #mc = torch.cat( [  mc, energy_err_mc .view(-1,1)  ], axis = 1 )
+    #mc_corrected = torch.cat( [  mc_corrected, energy_err_mc_corrected .view(-1,1)  ], axis = 1 )
 
     # Some weights can of course be negative, so I had to use the abs here, since it does not accept negative weights ...
     data_corr         = torch.cov( data.T         , aweights = torch.Tensor( abs(data_weights) ))
@@ -470,11 +472,11 @@ def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,
     
     #var_list_matrix_barrel=var_list_matrix_barrel.replace('probe_', '')
 
-    ax.set_xticks(np.arange(len(var_list_matrix_barrel)))
-    ax.set_yticks(np.arange(len(var_list_matrix_barrel)))
+    ax.set_xticks(np.arange(len(var_list_matrix_barrel)-2))
+    ax.set_yticks(np.arange(len(var_list_matrix_barrel)-2))
     
-    ax.set_xticklabels(var_list_matrix_barrel,fontsize = 45 ,rotation=90)
-    ax.set_yticklabels(var_list_matrix_barrel,fontsize = 45 ,rotation=0)
+    ax.set_xticklabels(var_list_matrix_barrel[1:-1],fontsize = 45 ,rotation=90)
+    ax.set_yticklabels(var_list_matrix_barrel[1:-1],fontsize = 45 ,rotation=0)
 
 
     plt.savefig(path + '/correlation_matrix_corrected_barrel.png')
@@ -494,11 +496,11 @@ def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,
             ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 60)  
     mean = mean/count   
 
-    ax.set_xticks(np.arange(len(var_list_matrix_barrel)))
-    ax.set_yticks(np.arange(len(var_list_matrix_barrel)))
+    ax.set_xticks(np.arange(len(var_list_matrix_barrel)-2))
+    ax.set_yticks(np.arange(len(var_list_matrix_barrel)-2))
     
-    ax.set_xticklabels(var_list_matrix_barrel,fontsize = 45,rotation=90)
-    ax.set_yticklabels(var_list_matrix_barrel,fontsize = 45,rotation=0)
+    ax.set_xticklabels(var_list_matrix_barrel[1:-1],fontsize = 45,rotation=90)
+    ax.set_yticklabels(var_list_matrix_barrel[1:-1],fontsize = 45,rotation=0)
 
     ax.set_xlabel(r'(Corr_MC-Corr_data  - Metric: ' + str(mean), loc = 'center' ,fontsize = 70)
 
@@ -589,7 +591,7 @@ def plot_correlation_matrix_diference_endcap(data, data_conditions,data_weights,
 
 
 #The events are binned in bins of equal number of events of each profilling variable, than the median is calculated!
-def plot_profile_barrel( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data_conditions, mc_weights, data_weights,path):
+def plot_profile_barrel( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data_conditions, mc_weights, data_weights,path, zmmg = False):
 
     # Barrel only mask!
     mask_mc   = np.abs( mc_conditions[:,1])   < 1.442
@@ -605,10 +607,10 @@ def plot_profile_barrel( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data
     data_weights    = data_weights[mask_data]
 
     #lets call the function ...
-    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,0],data_mva_id,data_conditions[:,0],mc_weights,data_weights , path, var = 'pt' )
-    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,1],data_mva_id,data_conditions[:,1],mc_weights,data_weights , path, var = 'eta' )
-    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,2],data_mva_id,data_conditions[:,2],mc_weights,data_weights , path ,var = 'phi' )
-    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,3],data_mva_id,data_conditions[:,3],mc_weights,data_weights , path ,var = 'rho' )
+    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,0],data_mva_id,data_conditions[:,0],mc_weights,data_weights , path, zmmg, var = 'pt'  )
+    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,1],data_mva_id,data_conditions[:,1],mc_weights,data_weights , path, zmmg, var = 'eta' )
+    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,2],data_mva_id,data_conditions[:,2],mc_weights,data_weights , path, zmmg, var = 'phi' )
+    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,3],data_mva_id,data_conditions[:,3],mc_weights,data_weights , path, zmmg, var = 'rho' )
 
 
 
@@ -637,16 +639,32 @@ def plot_profile_endcap( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data
 
 
 # Lets do this separatly, first, we do the plots at the barrel only!
-def plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,var_mc,data_mva_id,var_data,mc_weights,data_weights,path,var = 'pt' ):
+def plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,var_mc,data_mva_id,var_data,mc_weights,data_weights,path, zmmg,  var = 'pt' ):
     
-    if 'pt' in var:
-        bins = np.linspace( 25.0, 80.0, 20 )
-    elif 'phi' in var:
-        bins = np.linspace( -3.1415, 3.1415, 20)
-    elif 'eta' in var:
-        bins = np.linspace( -1.442, 1.442, 20 )
-    elif 'rho' in var:
-        bins = np.linspace( 5.0, 50.0, 20 )
+    nl_mva_ID    = np.array(nl_mva_ID)
+    mc_mva_id    = np.array(mc_mva_id)
+    data_mva_id  = np.array(data_mva_id)
+    mc_weights   = np.array(mc_weights)
+    data_weights = np.array(data_weights)
+
+    if( zmmg ):
+        if 'pt' in var:
+            bins = np.linspace( 20.0, 40.0, 6 )
+        elif 'phi' in var:
+            bins = np.linspace( -3.1415, 3.1415, 6)
+        elif 'eta' in var:
+            bins = np.linspace( -1.442, 1.442, 6 )
+        elif 'rho' in var:
+            bins = np.linspace( 10.0, 45.0, 6 )       
+    else:
+        if 'pt' in var:
+            bins = np.linspace( 25.0, 60.0, 13 )
+        elif 'phi' in var:
+            bins = np.linspace( -3.1415, 3.1415, 13)
+        elif 'eta' in var:
+            bins = np.linspace( -1.442, 1.442, 13 )
+        elif 'rho' in var:
+            bins = np.linspace( 10.0, 45.0, 13 )
 
     #arrays to store the 
     position, nl_mean, data_mean, mc_mean = [],[],[],[]

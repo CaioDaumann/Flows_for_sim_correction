@@ -306,8 +306,10 @@ def main():
     global var_list
     global conditions_list
 
+    plot_postEE = True
+
     plots_from_pytorch = False
-    zee_framework      = False
+    zee_framework      = True
 
     if( zee_framework  ):
 
@@ -335,22 +337,24 @@ def main():
             #files_2 = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_flow_fix_2/dataG_v13/nominal/*.parquet")
             #files_3 = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_flow_fix_2/dataE_v13/nominal/*.parquet")
 
-            files   = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataE_v13/nominal/*.parquet")
-            files_2 = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataG_v13/nominal/*.parquet")
-            files_3 = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataF_v13/nominal/*.parquet")
+            if( plot_postEE ):
 
-            files = [files, files_2, files_3]
+                files   = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataE_v13/nominal/*.parquet")
+                files_2 = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataG_v13/nominal/*.parquet")
+                files_3 = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataF_v13/nominal/*.parquet")
 
-            data = [pd.read_parquet(f) for f in files]
-            data_vector = pd.concat(data,ignore_index=True)
+                files = [files, files_2, files_3]
 
-            # reafing the mc files
-            #files = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_flow_fix_2/DY_postEE_v13/nominal/*.parquet")
-            files = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/DY_postEE_v13/nominal/*.parquet")
-            files = files[:150]
+                data = [pd.read_parquet(f) for f in files]
+                data_vector = pd.concat(data,ignore_index=True)
 
-            data = [pd.read_parquet(f) for f in files]
-            vector= pd.concat(data,ignore_index=True)        
+                # reafing the mc files
+                #files = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_flow_fix_2/DY_postEE_v13/nominal/*.parquet")
+                files = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/DY_postEE_v13/nominal/*.parquet")
+                files = files[:300]
+
+                data = [pd.read_parquet(f) for f in files]
+                vector= pd.concat(data,ignore_index=True)        
 
             # transforming the df into pytorch tensors - already masked!
             data_test_inputs     = torch.tensor(  np.array( data_vector[var_list]  ) )
@@ -381,17 +385,17 @@ def main():
         print('\nZmumugamma application!!!\n')
 
         # Lets also compare it with data, of course!
-        files = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_zmmg/dataG_v13/*.parquet")
-        files2 = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_zmmg/dataF_v13/*.parquet")
+        files = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_zmmg/dataC_v13/*.parquet")
+        files2 = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_zmmg/dataD_v13/*.parquet")
         files3 = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_zmmg/dataE_v13/*.parquet")
 
-        files = [files,files2,files3]
+        files = [files,files2]#,files3]
 
         data = [pd.read_parquet(f) for f in files]
         data_vector = pd.concat(data,ignore_index=True)
 
         # Now reading MC!
-        files = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_zmmg/DY_postEE_v13/*.parquet")
+        files = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_zmmg/DY_preEE_v13/*.parquet")
 
         data = [pd.read_parquet(f) for f in files]
         vector= pd.concat(data,ignore_index=True)
@@ -407,10 +411,13 @@ def main():
                 conditions_list[index] = item.replace('probe','photon')
 
         # from df to np arrays
-        data_test_inputs     = np.array(data_vector[var_list])
-        data_test_conditions = np.array(data_vector[conditions_list])
+        data_vector["photon_hoe"] = data_vector["photon_hoe"]*data_vector["photon_energyRaw"]
+        data_test_inputs          = np.array(data_vector[var_list])
+        data_test_conditions      = np.array(data_vector[conditions_list])
         data_test_weights         = np.ones(  len(data_vector)  )
         
+
+        vector["photon_hoe"] = vector["photon_hoe"]*vector["photon_energyRaw"]
 
         mc_test_inputs     = np.array(vector[var_list])
         mc_test_conditions = np.array(vector[conditions_list])
@@ -455,10 +462,15 @@ def main():
 
     # Flow trained with rw
     flow = zuko.flows.NSF( mc_test_inputs.size()[1] , context = mc_test_conditions.size()[1], bins = 10,transforms = 5, hidden_features=[256] * 2)
-    path_means_std = '/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/results/configuration_v13_big_stats_9_long_train/'
-    flow.load_state_dict(torch.load( path_means_std + 'best_model_.pth', map_location=torch.device('cpu')))
-
     
+    #postEE model
+    if( plot_postEE ):
+        path_means_std = '/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/results/configuration_v13_big_stats_9_long_train/'
+    else:
+        #preEE model
+        path_means_std = '/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/results/configuration_v13_big_stats_preEE_4/'
+    
+    flow.load_state_dict(torch.load( path_means_std + 'best_model_.pth', map_location=torch.device('cpu')))
 
     device = torch.device('cpu')
 
@@ -487,10 +499,14 @@ def main():
             mc_hist       = hist.Hist(hist.axis.Regular(50, mean - 2.5*std, mean + 2.5*std))
             mc_corr_hist  = hist.Hist(hist.axis.Regular(50, mean - 2.5*std, mean + 2.5*std))
 
-            if( 'Iso' in str(var_list[i])  or  'hoe' in str(var_list[i]) or 'es' in str(var_list[i])  ):
+            if( 'Iso' in str(var_list[i])  or 'es' in str(var_list[i])  ):
                 data_hist     = hist.Hist(hist.axis.Regular(50, 0.0, mean + 2.0*std))
                 mc_hist       = hist.Hist(hist.axis.Regular(50, 0.0, mean + 2.0*std))
                 mc_corr_hist  = hist.Hist(hist.axis.Regular(50, 0.0, mean + 2.0*std))
+            elif( 'hoe' in str(var_list[i]) ):
+                data_hist     = hist.Hist(hist.axis.Regular(20, 0.0, 0.06))
+                mc_hist       = hist.Hist(hist.axis.Regular(20, 0.0, 0.06))
+                mc_corr_hist  = hist.Hist(hist.axis.Regular(20, 0.0, 0.06))                
             elif( 'DR' in str(var_list[i]) and zee_framework):
                 data_hist     = hist.Hist(hist.axis.Regular(50, 0.0, 5.0))
                 mc_hist       = hist.Hist(hist.axis.Regular(50, 0.0, 5.0))
@@ -500,31 +516,31 @@ def main():
                 mc_hist       = hist.Hist(hist.axis.Regular(50, 0.0, mean + 2.0*std))
                 mc_corr_hist  = hist.Hist(hist.axis.Regular(50, 0.0, mean + 2.0*std))        
             elif( 'energy' in str(var_list[i]) ):
-                data_hist     = hist.Hist(hist.axis.Regular(50, 0.0, mean + 1.5*std))
-                mc_hist       = hist.Hist(hist.axis.Regular(50, 0.0, mean + 1.5*std))
-                mc_corr_hist  = hist.Hist(hist.axis.Regular(50, 0.0, mean + 1.5*std))
+                data_hist     = hist.Hist(hist.axis.Regular(30, 0.0, mean + 0.5*std))
+                mc_hist       = hist.Hist(hist.axis.Regular(30, 0.0, mean + 0.5*std))
+                mc_corr_hist  = hist.Hist(hist.axis.Regular(30, 0.0, mean + 0.5*std))
 
         else:
-            data_hist     = hist.Hist(hist.axis.Regular(30, mean - 2.0*std, mean + 2.0*std))
-            mc_hist       = hist.Hist(hist.axis.Regular(30, mean - 2.0*std, mean + 2.0*std))
-            mc_corr_hist  = hist.Hist(hist.axis.Regular(30, mean - 2.0*std, mean + 2.0*std))
+            data_hist     = hist.Hist(hist.axis.Regular(13, mean - 0.8*std, mean + 0.8*std))
+            mc_hist       = hist.Hist(hist.axis.Regular(13, mean - 0.8*std, mean + 0.8*std))
+            mc_corr_hist  = hist.Hist(hist.axis.Regular(13, mean - 0.8*std, mean + 0.8*std))
 
             if( 'Iso' in str(var_list[i])  or  'hoe' in str(var_list[i]) or 'es' in str(var_list[i])  ):
-                data_hist     = hist.Hist(hist.axis.Regular(30, 0.0, mean + 2.0*std))
-                mc_hist       = hist.Hist(hist.axis.Regular(30, 0.0, mean + 2.0*std))
-                mc_corr_hist  = hist.Hist(hist.axis.Regular(30, 0.0, mean + 2.0*std))
+                data_hist     = hist.Hist(hist.axis.Regular(35, 0.0, mean + 1.0*std))
+                mc_hist       = hist.Hist(hist.axis.Regular(35, 0.0, mean + 1.0*std))
+                mc_corr_hist  = hist.Hist(hist.axis.Regular(35, 0.0, mean + 1.0*std))
             elif( 'DR' in str(var_list[i]) and zee_framework):
-                data_hist     = hist.Hist(hist.axis.Regular(30, 0.0, 5.0))
-                mc_hist       = hist.Hist(hist.axis.Regular(30, 0.0, 5.0))
-                mc_corr_hist  = hist.Hist(hist.axis.Regular(30, 0.0, 5.0))
+                data_hist     = hist.Hist(hist.axis.Regular(15, 0.0, 5.0))
+                mc_hist       = hist.Hist(hist.axis.Regular(15, 0.0, 5.0))
+                mc_corr_hist  = hist.Hist(hist.axis.Regular(15, 0.0, 5.0))
             elif( 'DR' in str(var_list[i]) ):
-                data_hist     = hist.Hist(hist.axis.Regular(30, 0.0, mean + 2.0*std))
-                mc_hist       = hist.Hist(hist.axis.Regular(30, 0.0, mean + 2.0*std))
-                mc_corr_hist  = hist.Hist(hist.axis.Regular(30, 0.0, mean + 2.0*std))        
+                data_hist     = hist.Hist(hist.axis.Regular(10, 0.0, mean + 1.6*std))
+                mc_hist       = hist.Hist(hist.axis.Regular(10, 0.0, mean + 1.6*std))
+                mc_corr_hist  = hist.Hist(hist.axis.Regular(10, 0.0, mean + 1.6*std))        
             elif( 'energy' in str(var_list[i]) ):
-                data_hist     = hist.Hist(hist.axis.Regular(30, 0.0, mean + 1.5*std))
-                mc_hist       = hist.Hist(hist.axis.Regular(30, 0.0, mean + 1.5*std))
-                mc_corr_hist  = hist.Hist(hist.axis.Regular(30, 0.0, mean + 1.5*std))
+                data_hist     = hist.Hist(hist.axis.Regular(8, 0.0, mean + 0.5*std))
+                mc_hist       = hist.Hist(hist.axis.Regular(8, 0.0, mean + 0.5*std))
+                mc_corr_hist  = hist.Hist(hist.axis.Regular(8, 0.0, mean + 0.5*std))
 
 
         data_hist.fill(     np.array( data_test_inputs[:,i] )  )
@@ -535,7 +551,10 @@ def main():
             if( plots_from_pytorch ):
                 plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/zee/stand_" + str(var_list[i]) + '.png',  xlabel = str(var_list[i]) )
             else:
-                plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/df_zee/stand_" + str(var_list[i]) + '.png',  xlabel = str(var_list[i]) )
+                if( plot_postEE ):
+                    plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/df_zee/postEE/stand_" + str(var_list[i]) + '.png',  xlabel = str(var_list[i]) )
+                else:
+                    plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/df_zee/preEE/stand_" + str(var_list[i]) + '.png',  xlabel = str(var_list[i]) )
         else:
             plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/zmmg/stand_" + var_list[i] + '.png',  xlabel = str(var_list[i]), zmmg = True )
 
@@ -566,7 +585,11 @@ def main():
             if( plots_from_pytorch ):
                 plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/zee/stand_" + str(conditions_list[i]) + '.png',  xlabel = str(conditions_list[i]) )
             else:
-                plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/df_zee/stand_" + str(conditions_list[i]) + '.png',  xlabel = str(conditions_list[i]) )
+                if( plot_postEE ):
+                    plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/df_zee/postEE/stand_" + str(conditions_list[i]) + '.png',  xlabel = str(conditions_list[i]) )
+                else:
+                    plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/df_zee/preEE/stand_" + str(conditions_list[i]) + '.png',  xlabel = str(conditions_list[i]) )
+
         else:
             plot_utils.plott( data_hist, mc_hist,mc_corr_hist, "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/zmmg/stand_" + str(conditions_list[i]) + '.png',  xlabel = str(conditions_list[i]) )
 
@@ -574,11 +597,18 @@ def main():
     if( zee_framework ):
         if( plots_from_pytorch ):
             plot_utils.plot_mvaID_curve( store_mc_inputs, data_test_inputs , samples, store_mc_conditions, data_test_conditions, mc_test_weights, data_test_weights , "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/zee/"    )
+            plot_utils.plot_correlation_matrix_diference_barrel(torch.tensor(data_test_inputs), torch.tensor(data_test_conditions), torch.tensor(data_test_weights),  torch.tensor(store_mc_inputs), torch.tensor(store_mc_conditions), torch.tensor(mc_test_weights) , torch.tensor(samples),   "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/zee/")
         else:
-            plot_utils.plot_mvaID_curve( store_mc_inputs, data_test_inputs , samples, store_mc_conditions, data_test_conditions, mc_test_weights, data_test_weights , "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/df_zee/"    )
+            
+            if( plot_postEE ):
+                plot_utils.plot_mvaID_curve( store_mc_inputs, data_test_inputs , samples, store_mc_conditions, data_test_conditions, mc_test_weights, data_test_weights , "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/df_zee/postEE/"    )
+                plot_utils.plot_correlation_matrix_diference_barrel(torch.tensor(data_test_inputs), torch.tensor(data_test_conditions), torch.tensor(data_test_weights),  torch.tensor(store_mc_inputs), torch.tensor(store_mc_conditions), torch.tensor(mc_test_weights) , torch.tensor(samples),   "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/df_zee/postEE/")
+            else:
+                plot_utils.plot_mvaID_curve( store_mc_inputs, data_test_inputs , samples, store_mc_conditions, data_test_conditions, mc_test_weights, data_test_weights , "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/df_zee/postEE/"    )
+                plot_utils.plot_correlation_matrix_diference_barrel(torch.tensor(data_test_inputs), torch.tensor(data_test_conditions), torch.tensor(data_test_weights),  torch.tensor(store_mc_inputs), torch.tensor(store_mc_conditions), torch.tensor(mc_test_weights) , torch.tensor(samples),   "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/df_zee/postEE/")    
     else:
         plot_utils.plot_mvaID_curve( store_mc_inputs, data_test_inputs, samples, store_mc_conditions, data_test_conditions, mc_test_weights, data_test_weights, "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/zmmg/" , zmmg = True   )
+        plot_utils.plot_correlation_matrix_diference_barrel(torch.tensor(data_test_inputs), torch.tensor(data_test_conditions), torch.tensor(data_test_weights),  torch.tensor(store_mc_inputs), torch.tensor(store_mc_conditions), torch.tensor(mc_test_weights) , torch.tensor(samples),   "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/standalone_application/plots/zmmg/")
 
 if __name__ == "__main__":
     main()
-

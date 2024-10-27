@@ -32,11 +32,21 @@ class EarlyStopper:
 # But also perform the needed valdiaitons on Z->mumugamma and Diphoton samples 
 class Simulation_correction():
    
-    def __init__(self, configuration, n_transforms, n_splines_bins, aux_nodes, aux_layers, max_epoch_number, initial_lr, batch_size):
+    def __init__(self, configuration, var_list, var_list_barrel_only, conditions_list, indexes_for_iso_transform, IsAutoRegressive , n_transforms, n_splines_bins, aux_nodes, aux_layers, max_epoch_number, initial_lr, batch_size):
+
+        # Name of the variables used as conditions and during training!
+        self.variables_list = var_list
+        self.conditions_list = conditions_list
+        self.var_list_barrel_only = var_list_barrel_only
+        
+        if( IsAutoRegressive ):
+            self.n_passes_flow = 1
+        else:
+            self.n_passes_flow = 2
 
         # if False, the inputs are not standardized!
         self.perform_std_transform = True
-
+        self.indexes_for_iso_transform = indexes_for_iso_transform
         print( 'Standartization: ', self.perform_std_transform )
 
         # Checking if cuda is avaliable
@@ -81,7 +91,7 @@ class Simulation_correction():
 
 
         # The library we are using is zuko! - passes = 2 for coupling blocks!
-        flow = zuko.flows.NSF(self.training_inputs.size()[1], context=self.training_conditions.size()[1], bins = self.n_splines_bins ,transforms = self.n_transforms, hidden_features=[self.aux_nodes] * self.aux_layers, passes = 2)
+        flow = zuko.flows.NSF(self.training_inputs.size()[1], context=self.training_conditions.size()[1], bins = self.n_splines_bins ,transforms = self.n_transforms, hidden_features=[self.aux_nodes] * self.aux_layers, passes = self.n_passes_flow)
         flow.to(self.device)
         self.flow = flow
 
@@ -115,7 +125,7 @@ class Simulation_correction():
                 # "Sampling" the batch from the array
                 idxs = torch.randint(low=0, high= self.training_inputs.size()[0], size= ( self.batch_size,))
 
-                loss = self.training_weights[idxs]*(-self.flow(self.training_conditions[idxs]).log_prob( self.training_inputs[idxs]))
+                loss = abs(self.training_weights[idxs])*(-self.flow(self.training_conditions[idxs]).log_prob( self.training_inputs[idxs]))
                 loss = loss.mean()
 
                 loss.backward()
@@ -132,7 +142,7 @@ class Simulation_correction():
                 # evaluatin the validation loss
                 idxs = torch.randint(low=0, high= self.validation_conditions.size()[0], size= (10024,))
 
-                validation_loss = (1e6)*torch.tensor(self.validation_weights[idxs]).to(self.device)*(-self.flow(self.validation_conditions[idxs]).log_prob( self.validation_inputs[idxs] ))
+                validation_loss = (1e6)*torch.tensor(abs(self.validation_weights[idxs])).to(self.device)*(-self.flow(self.validation_conditions[idxs]).log_prob( self.validation_inputs[idxs] ))
                 validation_loss = validation_loss.mean()
 
                 # saving the losses for further plotting and monitoring!
@@ -152,7 +162,7 @@ class Simulation_correction():
                     self.flow.load_state_dict(torch.load( './results//saved_states/epoch_'+str(np.argmin( np.array( np.array( self.validation_loss_array )) )) +'.pth'))
                     torch.save(self.flow.state_dict(), self.dump_folder + "/best_model_.pth")
         
-                    print('\nEnd of model training! Now procedding to performance evaluation. This may take a while ... \n')
+                    print('\nEnd of model training! Now proceeding to performance evaluation. This may take a while ... \n')
 
                     break
 
@@ -201,10 +211,13 @@ class Simulation_correction():
             self.stitch_energy_raw_from_training()
 
             # I guess I should use the mc_validaiton tensor instead of this -> self.validation_inputs
-            plot_utils.plot_distributions_for_tensors( np.array(self.data_test_inputs) , np.array(self.mc_test_inputs), np.array(self.samples), np.array(self.mc_test_weights.to('cpu')), self.dump_folder )
+            plot_utils.plot_distributions_for_tensors( np.array(self.data_test_inputs) , np.array(self.mc_test_inputs), np.array(self.samples), np.array(self.mc_test_weights.to('cpu')), self.dump_folder, self.variables_list )
 
+            # for the barrel only correlation matrix we must get the indices of the variables from the 'full' list
+            match_indices_barrel = [index for index, item in enumerate(self.variables_list) if item in self.var_list_barrel_only]
+            
             # Plotting the correlation matrices to better understand how the flows treats the correlations
-            plot_utils.plot_correlation_matrix_diference_barrel(self.data_test_inputs.clone().detach().cpu(), self.data_test_conditions.clone().detach().cpu(), self.data_test_weights.clone().detach().cpu(),  self.mc_test_inputs.clone().detach().cpu(), self.mc_test_conditions.clone().detach().cpu(), self.mc_test_weights.clone().detach().cpu() , self.samples.clone().detach().cpu(),  self.dump_folder)
+            plot_utils.plot_correlation_matrix_diference_barrel(self.var_list_barrel_only , match_indices_barrel , self.data_test_inputs.clone().detach().cpu(), self.data_test_conditions.clone().detach().cpu(), self.data_test_weights.clone().detach().cpu(),  self.mc_test_inputs.clone().detach().cpu(), self.mc_test_conditions.clone().detach().cpu(), self.mc_test_weights.clone().detach().cpu() , self.samples.clone().detach().cpu(),  self.dump_folder)
             plot_utils.plot_correlation_matrix_diference_endcap(self.data_test_inputs.clone().detach().cpu(), self.data_test_conditions.clone().detach().cpu(), self.data_test_weights.clone().detach().cpu(),  self.mc_test_inputs.clone().detach().cpu(), self.mc_test_conditions.clone().detach().cpu(), self.mc_test_weights.clone().detach().cpu() , self.samples.clone().detach().cpu(),  self.dump_folder)
 
             # Now we evaluate the run3 mvaID and check how well the distributions agree
@@ -219,9 +232,8 @@ class Simulation_correction():
     def perform_transformation(self):
 
         # Lets now apply the Isolation transformation into the isolation variables
-        # This "self.indexes_for_iso_transform" are the indexes of the variables in the inputs= tensors where the isolation variables are stored
-        # and thus, where the transformations will be performed
-        self.indexes_for_iso_transform = [6,7,8,9,10,11,12,13,14] #[7,8,9,10,11,12,13,14,15] #[6,7,8,9,10,11,12,13,14] #this has to be changed once I take the energy raw out of the inputs
+        # This "self.indexes_for_iso_transform" are the indexes of the variables in the inputs= tensors where the isolation variables are stored and thus, where the transformations will be performed
+        #self.indexes_for_iso_transform = [6,7,8,9,10,11,12,13,14] #[7,8,9,10,11,12,13,14,15] #[6,7,8,9,10,11,12,13,14] #this has to be changed once I take the energy raw out of the inputs
         self.vector_for_iso_constructors_mc   = []
         self.vector_for_iso_constructors_data = []
 
@@ -272,14 +284,6 @@ class Simulation_correction():
         self.condition_mean_for_std = torch.mean( self.training_conditions[:,:-1][  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ], 0 )
         self.condition_std_for_std  = torch.std( self.training_conditions[:,:-1][  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ], 0 )
         
-        """
-        print( self.input_mean_for_std )
-        print( self.input_std_for_std )
-        print( self.condition_mean_for_std )
-        print( self.condition_std_for_std )
-        exit()
-        """
-    
         # transorming the training tensors
         if( self.perform_std_transform ):
             self.training_inputs = ( self.training_inputs - self.input_mean_for_std  )/self.input_std_for_std
@@ -404,7 +408,7 @@ class Make_iso_continuous:
         self.lowest_iso_value = 0.0 #torch.min( tensor[ bigger_than_zero ] )
 
         tensor[ bigger_than_zero ] = tensor[ bigger_than_zero ] + self.shift -self.lowest_iso_value 
-        tensor[ tensor_zero ]      = torch.tensor(np.random.triangular( left = 0. , mode = 0, right = self.shift*0.99, size = tensor[tensor_zero].size()[0]   ), dtype = tensor[ tensor_zero ].dtype )
+        tensor[ tensor_zero ]      = torch.tensor(np.random.triangular( left = 0. , mode = 0, right = self.shift*0.98, size = tensor[tensor_zero].size()[0]   ), dtype = tensor[ tensor_zero ].dtype )
         
         # now a log trasform is applied on top of the smoothing to stretch the events in the 0 traingular and "kill" the iso tails
         tensor = torch.log(  1e-3 + tensor ) 
