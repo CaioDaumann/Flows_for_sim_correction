@@ -45,7 +45,7 @@ def perform_reweighting(simulation_df, data_df):
     # Defining the reweigthing binning! - Bins were chossen such as each bin has ~ the same number of events
     pt_bins  = calculate_bins_position(np.array(simulation_df["probe_pt"]), 30)
     eta_bins = calculate_bins_position(np.array(simulation_df["probe_ScEta"]), 30)
-    rho_bins = calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 30) #np.linspace( 5,65, 30) #calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 70)
+    rho_bins = calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 40) #np.linspace( 5,65, 30) #calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 70)
 
     bins = [ pt_bins , eta_bins, rho_bins ]
 
@@ -122,6 +122,7 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
     mc_conditions  = torch.tensor(mc_conditions[mc_permutation])
     mc_weights     = torch.tensor(mc_weights[mc_permutation])
 
+    assert abs(torch.sum(mc_weights) - torch.sum(data_weights)) < 1
 
     # Now, in order not to bias the network we choose make sure the tensors of data and simulation have the same number of events
     try:
@@ -138,6 +139,11 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
         
         assert len( mc_weights )    == len( data_weights )
         assert len( mc_conditions ) == len(data_conditions)
+
+    # lets normalize the weights here again just to be sure ....
+    mc_weights = len(data_weights)*mc_weights/torch.sum(mc_weights)
+
+    assert abs(torch.sum(mc_weights) - torch.sum(data_weights)) < 1
 
     print( 'Number of MC events after equiparing! ', len( mc_conditions ), ' Number of data events: ', len(data_conditions))
 
@@ -227,38 +233,34 @@ def read_zee_data(var_list, conditions_list, data_samples_path, mc_samples_path,
     drell_yan_df = pd.concat(files_mc, ignore_index=True)
         
     # Now that the data is read, we need to perform a loose selection with the objective of decrease teh background contamination
-    # The cuts include:
-    # Mass windown cut: We only select events in a tight mass window around the Z peak [80,100]
-    # Select event with eta < 2.5
-    # loose tag mvaID cut of 0.0. Since the training is performed in probe electrons we dont expect a bias
-    # The selection will be done in the perform_zee_selection() function
     data_df = perform_zee_selection(data_df)
     drell_yan_df = perform_zee_selection(drell_yan_df)
+
+    # lets keep the MC weights before rw for validation
+    mc_weights_before = drell_yan_df["weight"].values
 
     # Lets now perform a kinematic reweigthing after selection
     if( DokinematicsRW ):
         data_df["weight"] ,drell_yan_df["weight"] = perform_reweighting(drell_yan_df, data_df)
-        
-
-    # Only for debugging! Remove later
-    #drell_yan_df = drell_yan_df[:4500000]
-    #data_df = data_df[:4500000]
-
-    # now, due to diferences in kinematics, a rewighting in the four kinematic variables [pt,eta,phi and rho] will be perform
-    mc_weights        = np.array(drell_yan_df["weight"].values)
-    data_weights      = np.ones( len( data_df["fixedGridRhoAll"] ) )
     
-    # Normalizing the weights to one
-    mc_weights   = mc_weights/np.sum(mc_weights)
-    data_weights = data_weights/np.sum(data_weights)
+    # Normalizing the weoghts do data!
+    data_df["weight"]      = len(data_df["weight"])*data_df["weight"]/np.sum(data_df["weight"])
+    drell_yan_df["weight"] = len(data_df["weight"])*drell_yan_df["weight"]/np.sum(drell_yan_df["weight"])
+    mc_weights_before      = len(data_df["weight"])*mc_weights_before/np.sum(mc_weights_before)
     
-    mc_weights_before = mc_weights
+    assert abs(np.sum(drell_yan_df["weight"]) - np.sum(data_df["weight"])) <= 1
+    
+    # Making the weigths into numpy arrays
+    mc_weights        = drell_yan_df["weight"].values
+    data_weights      = data_df["weight"].values
+    
+    assert np.sum(mc_weights ) - np.sum(data_weights) <= 1
     
     # now lets call a plotting function to perform the plots of the read distributions for validation porpuses
-    path_to_plots = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/plot/validation_plots/"
+    path_to_plots = "./plot/validation_plots/reweighting_validation/"
 
     # now as a last step, we need to split the data into training, validation and test dataset
-    plot_utils.plot_distributions( path_to_plots, data_df, drell_yan_df, data_weights, mc_weights , [var_list, conditions_list], weights_befores_rw = mc_weights_before)
+    plot_utils.plot_distributions( path_to_plots, data_df, drell_yan_df, data_weights, mc_weights , [var_list, conditions_list], weights_before_rw = mc_weights_before)
 
     # now, the datsets will be separated into training, validation and test dataset, and saved for further reading by the training class!
     separate_training_data(data_df, drell_yan_df, mc_weights, data_weights, var_list, conditions_list)

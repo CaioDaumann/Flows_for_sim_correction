@@ -37,7 +37,13 @@ def main():
     data_samples_path = data["data_files"]
     mc_samples_path = data["MC_files"]
     mc_samples_lumi_norm = data["MC_files_normalization"]
+    
+    # These quantities are related to the transformations applied to the non-continious variables
+    # You should add the index of these quantities in the variables name list
     Index_for_Iso_transform = data["Index_for_Iso_transform"]
+    Iso_transform_shift = data["Iso_transform_shift"]
+    
+    assert len(Iso_transform_shift) == len(Index_for_Iso_transform)
     
     #loop to read over network condigurations from the yaml file: - one way to do hyperparameter optimization
     stream = open("flow_configuration.yaml", 'r')
@@ -65,7 +71,7 @@ def main():
             data_reader.read_zee_data(var_list, conditions_list, data_samples_path, mc_samples_path, mc_samples_lumi_norm, DoKinematicsRW)
 
         # Now, we call the class that handles the transformations, training and validaiton of the corrections
-        corrections = training_utils.Simulation_correction( str(key),  var_list, var_list_barrel_only, conditions_list , Index_for_Iso_transform , IsAutoRegressive,n_transforms, n_splines_bins, aux_nodes, aux_layers, max_epoch_number, initial_lr, batch_size  )
+        corrections = training_utils.Simulation_correction( str(key),  var_list, var_list_barrel_only, conditions_list , Index_for_Iso_transform, Iso_transform_shift , IsAutoRegressive,n_transforms, n_splines_bins, aux_nodes, aux_layers, max_epoch_number, initial_lr, batch_size  )
         corrections.setup_flow()
         corrections.train_the_flow()
 

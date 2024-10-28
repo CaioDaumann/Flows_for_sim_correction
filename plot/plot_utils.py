@@ -8,6 +8,7 @@ import mplhep, hist
 plt.style.use([mplhep.style.CMS])
 import mplhep as hep
 import xgboost
+import os
 
 # Names of the used variables, I copied it here only so it is easier to use it acess the labels and names of teh distirbutions
 var_list = ["probe_energyRaw",
@@ -44,6 +45,7 @@ var_list_matrix_barrel = ["probe_energyRaw",
             "probe_pfChargedIsoWorstVtx",
             "probe_energyErr"]
 
+
 # The next three functions are related to the plotting of the profiles of the MVA as a function of the kinematical variables
 # This function calculate the means of the input quantiles! - Weighted mean, of couse.
 def weighted_quantiles_interpolate(values, weights, quantiles=0.5):
@@ -60,7 +62,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
         mc_hist,
         label = r'$Z\rightarrow ee$',
         yerr=True,
-        density = True,
+        density = False,
         color = "blue",
         linewidth=3,
         ax=ax[0]
@@ -69,7 +71,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
     hep.histplot(
         mc_rw_hist,
         label = r'$Z\rightarrow ee$ Corr',
-        density = True,
+        density = False,
         color = "red",
         linewidth=3,
         ax=ax[0]
@@ -78,7 +80,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
     hep.histplot(
         data_hist,
         label = "Data",
-        density = True,
+        density = False,
         color="black",
         linewidth=3,
         histtype='errorbar',
@@ -180,43 +182,133 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel,region=None  ):
 
     return 0
 
-# This is a plot distribution suitable for dataframes, if one wants to plot tensors see "plot_distributions_for_tensors()"
-def plot_distributions( path, data_df, mc_df, data_weights, mc_weights, variables_to_plot, weights_befores_rw = False ):
+def plot_distributions( path, data_df, mc_df, data_weights, mc_weights, variables_to_plot, weights_before_rw = False ):
 
-    for set in variables_to_plot:
+    # Ensure the output directory exists
+    os.makedirs(path, exist_ok=True)
 
-        for key in set:
+    for variable_group in variables_to_plot:
+        for variable in variable_group:
+            # Clean the variable name by removing '_raw' if present
+            clean_variable = variable.replace('_raw', '')
 
-            mean = np.mean( np.nan_to_num(np.array(data_df[key.replace('_raw','')])) )
-            std  = np.std(  np.nan_to_num(np.array(data_df[key.replace('_raw','')])) )
+            # Extract data for the variable
+            data_values = data_df[clean_variable].dropna().values
+            mc_values = mc_df[variable].dropna().values
 
-            if( 'Iso' in key or 'DR' in key   ):
-                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
-                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
-            elif( 'hoe' in  key ):
-                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
-                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
+            # Compute mean and standard deviation for data histogram binning
+            mean = np.mean(data_values)
+            std = np.std(data_values)
+
+            # Define histogram bin edges based on the variable name
+            if 'Iso' in variable or 'DR' in variable:
+                bin_edges = np.linspace(0.0, 3.5, 101)
+            elif 'hoe' in variable:
+                bin_edges = np.linspace(0.0, 0.08, 101)
             else:
-                data_hist            = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
-                mc_hist              = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
+                bin_min = mean - 3.0 * std
+                bin_max = mean + 4.0 * std
+                bin_edges = np.linspace(bin_min, bin_max, 101)
 
-            data_hist.fill( np.array(data_df[key.replace('_raw','')]   ) , weight = data_weights )
-            
-            if( len(weights_befores_rw)  ):
-                mc_hist.fill( np.array(  mc_df[key]), weight = weights_befores_rw )
+            # Create histograms
+            bins = hist.axis.Variable(bin_edges)
+            data_hist = hist.Hist(bins)
+            mc_hist = hist.Hist(bins)
+            mc_rw_hist = hist.Hist(bins)
+
+            # Fill histograms
+            data_hist.fill(data_values, weight=data_weights)
+            if weights_before_rw is not None:
+                mc_hist.fill(mc_values, weight=weights_before_rw)
             else:
-                mc_hist.fill( np.array(  mc_df[key]) )
+                mc_hist.fill(mc_values)
+            mc_rw_hist.fill(mc_values, weight=mc_weights)
 
-            #print( np.shape( np.array(drell_yan_df[key]) ) , np.shape( mc_weights  ) )
+            # Plot and save the histograms
+            output_path = os.path.join(path, f"{variable}.png")
+            plott(data_hist, mc_hist, mc_rw_hist, output_path, xlabel=variable)
 
-            mc_rw_hist.fill( np.array(mc_df[key]) , weight = mc_weights )
+def plot_distributions_for_tensors(
+    data_tensor,
+    mc_tensor,
+    flow_samples,
+    mc_weights,
+    plot_path,
+    variables_list
+):
+    """
+    Plots distributions for data, Monte Carlo (MC), and reweighted MC samples.
 
-            plott( data_hist , mc_hist, mc_rw_hist , path +  str(key) +".png", xlabel = str(key)  )
+    Parameters:
+    - data_tensor (numpy.ndarray or torch.Tensor): Data tensor of shape (n_samples, n_features).
+    - mc_tensor (numpy.ndarray or torch.Tensor): MC tensor of shape (n_samples, n_features).
+    - flow_samples (numpy.ndarray or torch.Tensor): Samples from the flow model, shape (n_samples, n_features).
+    - mc_weights (numpy.ndarray or torch.Tensor): Weights for MC samples.
+    - plot_path (str): Directory path to save the plots.
+    - variables_list (list of str): List of variable names corresponding to the features.
 
-def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_weights, plot_path, variables_list ):
+    The function creates histograms for each variable and plots the distributions
+    for data, MC, and reweighted MC samples.
+    """
+
+    # Ensure the output directory exists
+    os.makedirs(plot_path, exist_ok=True)
+
+    # Convert tensors to NumPy arrays if they are PyTorch tensors
+    if isinstance(data_tensor, torch.Tensor):
+        data_tensor = data_tensor.cpu().numpy()
+    if isinstance(mc_tensor, torch.Tensor):
+        mc_tensor = mc_tensor.cpu().numpy()
+    if isinstance(flow_samples, torch.Tensor):
+        flow_samples = flow_samples.cpu().numpy()
+    if isinstance(mc_weights, torch.Tensor):
+        mc_weights = mc_weights.cpu().numpy()
+
+    n_features = data_tensor.shape[1]
+    n_variables = len(variables_list)
+    if n_features != n_variables:
+        raise ValueError("Number of features in data_tensor does not match length of variables_list.")
+
+    for i in range(n_features):
+        variable_name = variables_list[i]
+
+        # Extract data for the variable
+        data_values = data_tensor[:, i]
+        mc_values = mc_tensor[:, i]
+        flow_values = flow_samples[:, i]
+
+        # Compute mean and standard deviation for data histogram binning
+        mean = np.mean(data_values)
+        std = np.std(data_values)
+
+        # Determine histogram binning based on variable name
+        if any(substring in variable_name for substring in ['Iso', 'DR', 'esE', 'hoe', 'energy']):
+            bin_min = 0.0
+            bin_max = mean + 2.0 * std
+            # Special case for 'DR04'
+            if 'DR04' in variable_name:
+                bin_max = 5.0
+            bins = hist.axis.Regular(50, bin_min, bin_max)
+        else:
+            bin_min = mean - 2.5 * std
+            bin_max = mean + 2.5 * std
+            bins = hist.axis.Regular(50, bin_min, bin_max)
+
+        # Create histograms
+        data_hist = hist.Hist(bins)
+        mc_hist = hist.Hist(bins)
+        mc_rw_hist = hist.Hist(bins)
+
+        # Fill histograms
+        data_hist.fill(data_values)
+        mc_hist.fill(mc_values, weight=mc_weights)
+        mc_rw_hist.fill(flow_values, weight=mc_weights)
+
+        # Plot and save histograms
+        output_file = os.path.join(plot_path, f"{variable_name}.png")
+        plott(data_hist, mc_hist, mc_rw_hist, output_file, xlabel=variable_name)
+
+def plot_distributions_for_tensors__( data_tensor, mc_tensor, flow_samples, mc_weights, plot_path, variables_list ):
 
     for i in range( np.shape( data_tensor )[1] ):
 
@@ -238,8 +330,8 @@ def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_wei
                 mc_rw_hist           = hist.Hist(hist.axis.Regular(50, 0.0 , 5.0))
 
             data_hist.fill( np.array(data_tensor[:,i]   )  )
-            mc_hist.fill(  np.array( mc_tensor[:,i]),  weight = 1e6*mc_weights )
-            mc_rw_hist.fill( np.array( flow_samples[:,i]) , weight = 1e6*mc_weights )
+            mc_hist.fill(  np.array( mc_tensor[:,i]),  weight = mc_weights )
+            mc_rw_hist.fill( np.array( flow_samples[:,i]) , weight = mc_weights )
 
             plott( data_hist , mc_hist, mc_rw_hist , plot_path +  str(variables_list[i]) +".png", xlabel = str(variables_list[i])  )
 
@@ -364,7 +456,108 @@ def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data
 
     plott( data_mva , mc_mva, nl_mva , plot_path + '/mvaID_endcap.png', xlabel = "End cap mvaID"  )
 
-def plot_distributions_after_transformations(training_inputs, training_conditions, training_weights):
+def plot_distributions_after_transformations(
+    var_list,
+    training_inputs,
+    conditions_list,
+    training_conditions,
+    training_weights,
+    output_path='plot/validation_plots/after_transformation/'
+):
+    """
+    Plots distributions of variables and conditions after transformations.
+
+    Parameters:
+    - var_list (list of str): List of variable names corresponding to training_inputs columns.
+    - training_inputs (numpy.ndarray or torch.Tensor): Array of input variables (samples x features).
+    - conditions_list (list of str): List of condition names corresponding to training_conditions columns.
+    - training_conditions (numpy.ndarray or torch.Tensor): Array of condition variables (samples x conditions).
+    - training_weights (numpy.ndarray or torch.Tensor): Array of training weights for each sample.
+    - output_path (str, optional): Directory where plots will be saved.
+      Defaults to 'plot/validation_plots/after_transformation/'.
+    """
+
+    # Ensure the output directory exists
+    os.makedirs(output_path, exist_ok=True)
+
+    # lets remove energy raw from here if it exists!
+    #var_list = [entry for entry in var_list if "probe_energyRaw" not in entry.lower() and "probe_energyRaw" not in entry.lower()]
+    var_list = var_list[1:] # hotfix to elimnate energyRaw from the inputs
+
+
+    # Convert inputs to NumPy arrays if they are PyTorch tensors
+    if isinstance(training_inputs, torch.Tensor):
+        training_inputs = training_inputs.cpu().numpy()
+    if isinstance(training_conditions, torch.Tensor):
+        training_conditions = training_conditions.cpu().numpy()
+    if isinstance(training_weights, torch.Tensor):
+        training_weights = training_weights.cpu().numpy()
+
+    # Masks to separate events between data and MC based on the last column of training_conditions
+    data_mask = training_conditions[:, -1] == 1
+    mc_mask = training_conditions[:, -1] == 0
+
+    # Ensure that masks are boolean NumPy arrays
+    data_mask = data_mask.astype(bool)
+    mc_mask = mc_mask.astype(bool)
+
+    # Plot distributions for input variables
+    num_variables = training_inputs.shape[1]
+    for i in range(num_variables):
+        variable_name = var_list[i]
+
+        # Extract data for the variable
+        data_values = training_inputs[data_mask, i]
+        mc_values = training_inputs[mc_mask, i]
+        mc_weights = training_weights[mc_mask]
+
+        # Compute mean and standard deviation for data histogram binning
+        mean = np.mean(data_values)
+        std = np.std(data_values)
+
+        # Create histograms with appropriate binning
+        #bins = hist.axis.Regular(70, mean - 3.0 * std, mean + 3.0 * std)
+        bins = hist.axis.Regular(70, -5.0, 5.0)
+        bins = hist.axis.Regular(70, np.min(data_values) , np.max(data_values))
+        data_hist = hist.Hist(bins)
+        mc_hist = hist.Hist(bins)
+
+        # Fill histograms
+        data_hist.fill(data_values)
+        mc_hist.fill(mc_values, weight=mc_weights)
+
+        # Plot and save histograms
+        output_file = os.path.join(output_path, f'after_transform_{variable_name}.png')
+        plott(data_hist, mc_hist, mc_hist, output_file, xlabel=variable_name)
+
+    # Plot distributions for condition variables
+    num_conditions = training_conditions.shape[1] - 1
+    for i in range(num_conditions):
+        condition_name = conditions_list[i]
+
+        # Extract data for the condition
+        data_values = training_conditions[data_mask, i]
+        mc_values = training_conditions[mc_mask, i]
+        mc_weights = training_weights[mc_mask]
+
+        # Compute mean and standard deviation for data histogram binning
+        mean = np.mean(data_values)
+        std = np.std(data_values)
+
+        # Create histograms with appropriate binning
+        bins = hist.axis.Regular(70, mean - 3.0 * std, mean + 3.0 * std)
+        data_hist = hist.Hist(bins)
+        mc_hist = hist.Hist(bins)
+
+        # Fill histograms
+        data_hist.fill(data_values)
+        mc_hist.fill(mc_values, weight=mc_weights)
+
+        # Plot and save histograms
+        output_file = os.path.join(output_path, f'after_transform_{condition_name}.png')
+        plott(data_hist, mc_hist, mc_hist, output_file, xlabel=condition_name)
+
+def plot_distributions_after_transformations__(var_list,training_inputs, conditions_list, training_conditions, training_weights):
 
     # two masks to separate events betwenn mc and data
     data_mask = training_conditions[:,-1] == 1
@@ -389,7 +582,7 @@ def plot_distributions_after_transformations(training_inputs, training_condition
                 mc_hist.fill(  np.array( training_inputs[mc_mask][:,i]),  weight = 1e6*training_weights[mc_mask] )
                 #mc_rw_hist.fill( np.array( flow_samples[:,i]) , weight = 1e6*mc_weights )
 
-                plott( data_hist , mc_hist, mc_hist , 'plots/validation_plots/transformation/after_transform_' +  str(var_list[i]) +".png", xlabel = str(var_list[i])  )
+                plott( data_hist , mc_hist, mc_hist , 'plot/validation_plots/after_transformation/after_transform_' +  str(var_list[i]) +".png", xlabel = str(var_list[i])  )
 
 
 def plot_correlation_matrix_diference_barrel(
@@ -910,3 +1103,39 @@ def plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,var_mc,data_mva_id,var_data,m
     plt.savefig( path + '/profile_endcap_' + str(var) +'.png' )
 
     plt.close()
+
+# This is a plot distribution suitable for dataframes, if one wants to plot tensors see "plot_distributions_for_tensors()"
+def plot_distributions__( path, data_df, mc_df, data_weights, mc_weights, variables_to_plot, weights_befores_rw = False ):
+
+    for set in variables_to_plot:
+
+        for key in set:
+
+            mean = np.mean( np.nan_to_num(np.array(data_df[key.replace('_raw','')])) )
+            std  = np.std(  np.nan_to_num(np.array(data_df[key.replace('_raw','')])) )
+
+            if( 'Iso' in key or 'DR' in key   ):
+                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
+                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
+            elif( 'hoe' in  key ):
+                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
+                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
+            else:
+                data_hist            = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
+
+            data_hist.fill( np.array(data_df[key.replace('_raw','')]   ) , weight = data_weights )
+            
+            if( len(weights_befores_rw)  ):
+                mc_hist.fill( np.array(  mc_df[key]), weight = weights_befores_rw )
+            else:
+                mc_hist.fill( np.array(  mc_df[key]) )
+
+            #print( np.shape( np.array(drell_yan_df[key]) ) , np.shape( mc_weights  ) )
+
+            mc_rw_hist.fill( np.array(mc_df[key]) , weight = mc_weights )
+
+            plott( data_hist , mc_hist, mc_rw_hist , path +  str(key) +".png", xlabel = str(key)  )

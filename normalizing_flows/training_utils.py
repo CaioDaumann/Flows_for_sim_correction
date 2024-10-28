@@ -32,7 +32,7 @@ class EarlyStopper:
 # But also perform the needed valdiaitons on Z->mumugamma and Diphoton samples 
 class Simulation_correction():
    
-    def __init__(self, configuration, var_list, var_list_barrel_only, conditions_list, indexes_for_iso_transform, IsAutoRegressive , n_transforms, n_splines_bins, aux_nodes, aux_layers, max_epoch_number, initial_lr, batch_size):
+    def __init__(self, configuration, var_list, var_list_barrel_only, conditions_list, indexes_for_iso_transform, Iso_transform_shift, IsAutoRegressive , n_transforms, n_splines_bins, aux_nodes, aux_layers, max_epoch_number, initial_lr, batch_size):
 
         # Name of the variables used as conditions and during training!
         self.variables_list = var_list
@@ -45,8 +45,10 @@ class Simulation_correction():
             self.n_passes_flow = 2
 
         # if False, the inputs are not standardized!
-        self.perform_std_transform = True
+        self.perform_std_transform     = True
         self.indexes_for_iso_transform = indexes_for_iso_transform
+        self.Iso_transform_shift       = Iso_transform_shift
+        
         print( 'Standartization: ', self.perform_std_transform )
 
         # Checking if cuda is avaliable
@@ -89,7 +91,6 @@ class Simulation_correction():
     # performs the training of the normalizing flows
     def setup_flow(self):
 
-
         # The library we are using is zuko! - passes = 2 for coupling blocks!
         flow = zuko.flows.NSF(self.training_inputs.size()[1], context=self.training_conditions.size()[1], bins = self.n_splines_bins ,transforms = self.n_transforms, hidden_features=[self.aux_nodes] * self.aux_layers, passes = self.n_passes_flow)
         flow.to(self.device)
@@ -114,7 +115,7 @@ class Simulation_correction():
         self.flow = self.flow.type(   self.training_inputs.dtype )
 
         # Normalizing the weights to one
-        self.training_weights = self.training_weights/torch.sum( self.training_weights )
+        #self.training_weights = self.training_weights/torch.sum( self.training_weights )
 
         for epoch in range(999):
             for batch in range(2000):
@@ -142,17 +143,17 @@ class Simulation_correction():
                 # evaluatin the validation loss
                 idxs = torch.randint(low=0, high= self.validation_conditions.size()[0], size= (10024,))
 
-                validation_loss = (1e6)*torch.tensor(abs(self.validation_weights[idxs])).to(self.device)*(-self.flow(self.validation_conditions[idxs]).log_prob( self.validation_inputs[idxs] ))
+                validation_loss = torch.tensor(abs(self.validation_weights[idxs])).to(self.device)*(-self.flow(self.validation_conditions[idxs]).log_prob( self.validation_inputs[idxs] ))
                 validation_loss = validation_loss.mean()
 
                 # saving the losses for further plotting and monitoring!
-                self.training_loss_array.append(   float(1e6*loss) )
+                self.training_loss_array.append(   float(loss) )
                 self.validation_loss_array.append( float(validation_loss) )
 
                 # updating the lr scheduler
                 self.scheduler.step( validation_loss )
 
-                print( 'Epoch: ', epoch , ' Training loss: ', float( loss*1e6 ) , ' Validation loss: ', float(validation_loss) )
+                print( 'Epoch: ', epoch , ' Training loss: ', float( loss ) , ' Validation loss: ', float(validation_loss) )
 
                 if( self.early_stopper.early_stop( float( validation_loss ) ) or epoch > self.max_epoch_number ):
 
@@ -197,6 +198,9 @@ class Simulation_correction():
             np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'conditions_means.npy', self.condition_mean_for_std)
             np.save( os.getcwd() + '/results/' +self.configuration + '/'  +  'conditions_std.npy' , self.condition_std_for_std )
 
+            np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'max_values.npy' , self.max_values )
+            np.save( os.getcwd() + '/results/' +self.configuration + '/'  + 'min_values.npy' , self.min_values )
+
             # now, lets invert the transformations
             self.invert_transformation()
 
@@ -233,37 +237,34 @@ class Simulation_correction():
 
         # Lets now apply the Isolation transformation into the isolation variables
         # This "self.indexes_for_iso_transform" are the indexes of the variables in the inputs= tensors where the isolation variables are stored and thus, where the transformations will be performed
-        #self.indexes_for_iso_transform = [6,7,8,9,10,11,12,13,14] #[7,8,9,10,11,12,13,14,15] #[6,7,8,9,10,11,12,13,14] #this has to be changed once I take the energy raw out of the inputs
         self.vector_for_iso_constructors_mc   = []
         self.vector_for_iso_constructors_data = []
 
-        # creating the constructors
-        for index in self.indexes_for_iso_transform:
+        # Performing the transformations of the non-continious variables
+        if len(self.indexes_for_iso_transform) > 0:
             
-            # since hoe has very low values, the shift value (value until traingular events are sampled) must be diferent here
-            if( index == 6 ):
-                self.vector_for_iso_constructors_data.append( Make_iso_continuous(self.data_training_inputs[:,index], self.device , b = 0.001) )
-                self.vector_for_iso_constructors_mc.append( Make_iso_continuous(self.mc_training_inputs[:,index], self.device  , b= 0.001) )
-            else:
-                self.vector_for_iso_constructors_data.append( Make_iso_continuous(self.data_training_inputs[:,index], self.device ) )
-                self.vector_for_iso_constructors_mc.append( Make_iso_continuous(self.mc_training_inputs[:,index], self.device ) )
+            # Creating the constructors
+            for index, shift_values in zip(self.indexes_for_iso_transform, self.Iso_transform_shift):
+                
+                self.vector_for_iso_constructors_data.append( Make_iso_continuous(self.data_training_inputs[:,index], self.device , shift = shift_values) )
+                self.vector_for_iso_constructors_mc.append( Make_iso_continuous(self.mc_training_inputs[:,index], self.device  , shift= shift_values) )
+                
+            # Now really applying the transformations
+            counter = 0
+            for index in self.indexes_for_iso_transform:
+                
+                # transforming the training dataset 
+                self.data_training_inputs[:,index] = self.vector_for_iso_constructors_data[counter].shift_and_sample(self.data_training_inputs[:,index])
+                self.mc_training_inputs[:,index] = self.vector_for_iso_constructors_mc[counter].shift_and_sample(self.mc_training_inputs[:,index])
 
-        # now really applying the transformations
-        counter = 0
-        for index in self.indexes_for_iso_transform:
-            
-            # transforming the training dataset 
-            self.data_training_inputs[:,index] = self.vector_for_iso_constructors_data[counter].shift_and_sample(self.data_training_inputs[:,index])
-            self.mc_training_inputs[:,index] = self.vector_for_iso_constructors_mc[counter].shift_and_sample(self.mc_training_inputs[:,index])
+                # transforming the validation dataset
+                self.data_validation_inputs[:,index] = self.vector_for_iso_constructors_data[counter].shift_and_sample(self.data_validation_inputs[:,index])
+                self.mc_validation_inputs[:,index] = self.vector_for_iso_constructors_mc[counter].shift_and_sample(self.mc_validation_inputs[:,index])
 
-            # transforming the validation dataset
-            self.data_validation_inputs[:,index] = self.vector_for_iso_constructors_data[counter].shift_and_sample(self.data_validation_inputs[:,index])
-            self.mc_validation_inputs[:,index] = self.vector_for_iso_constructors_mc[counter].shift_and_sample(self.mc_validation_inputs[:,index])
+                # for the test dataset, we only have to transform the mc part
+                self.mc_test_inputs[:,index] = self.vector_for_iso_constructors_mc[counter].shift_and_sample(self.mc_test_inputs[:,index])
 
-            # for the test dataset, we only have to transform the mc part
-            self.mc_test_inputs[:,index] = self.vector_for_iso_constructors_mc[counter].shift_and_sample(self.mc_test_inputs[:,index])
-
-            counter = counter + 1
+                counter = counter + 1
 
         self.mc_test_inputs = self.mc_test_inputs.to(self.device)
 
@@ -297,13 +298,49 @@ class Simulation_correction():
             self.mc_test_inputs = ( self.mc_test_inputs - self.input_mean_for_std  )/self.input_std_for_std
             self.mc_test_conditions[:,:-1] = ( self.mc_test_conditions[:,:-1] - self.condition_mean_for_std  )/self.condition_std_for_std
 
+        # Lets apply min max scale to the variables that undergo the shift and scale transformation
+        self.max_values = self.training_inputs[  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ][:, self.indexes_for_iso_transform].max(dim=0).values
+        self.min_values = self.training_inputs[  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ][:, self.indexes_for_iso_transform].min(dim=0).values
+
+        if len(self.indexes_for_iso_transform) > 0:
+            # Apply min-max scaling to the range [-4, 4]
+            self.training_inputs[:, self.indexes_for_iso_transform] = -4 + (
+                (self.training_inputs[:, self.indexes_for_iso_transform] - self.min_values) * 8
+            ) / (self.max_values - self.min_values)
+
+            self.validation_inputs[:, self.indexes_for_iso_transform] = -4 + (
+                (self.validation_inputs[:, self.indexes_for_iso_transform] - self.min_values) * 8
+            ) / (self.max_values - self.min_values)
+
+            self.mc_test_inputs[:, self.indexes_for_iso_transform] = -4 + (
+                (self.mc_test_inputs[:, self.indexes_for_iso_transform] - self.min_values) * 8
+            ) / (self.max_values - self.min_values)
+
         # Lets now plot the distirbutions after the transformations
-        plot_utils.plot_distributions_after_transformations(self.training_inputs.clone().detach().cpu(), self.training_conditions.clone().detach().cpu(), self.training_weights.clone().detach().cpu())
+        plot_utils.plot_distributions_after_transformations(self.variables_list ,self.training_inputs.clone().detach().cpu(), self.conditions_list ,self.training_conditions.clone().detach().cpu(), self.training_weights.clone().detach().cpu())
 
     # this function will be responsable to perform the inverse transformations in data
     def invert_transformation(self):
         
-        # transorming the training tensors
+        if len(self.indexes_for_iso_transform) > 0:
+            # Revert the min-max scaling from [-4, 4] back to original
+            self.training_inputs[:, self.indexes_for_iso_transform] = self.min_values + (
+                (self.training_inputs[:, self.indexes_for_iso_transform] + 4) * (self.max_values - self.min_values)
+            ) / 8
+
+            self.validation_inputs[:, self.indexes_for_iso_transform] = self.min_values + (
+                (self.validation_inputs[:, self.indexes_for_iso_transform] + 4) * (self.max_values - self.min_values)
+            ) / 8
+
+            self.mc_test_inputs[:, self.indexes_for_iso_transform] = self.min_values + (
+                (self.mc_test_inputs[:, self.indexes_for_iso_transform] + 4) * (self.max_values - self.min_values)
+            ) / 8  
+            
+            self.samples[:, self.indexes_for_iso_transform] = self.min_values + (
+                (self.samples[:, self.indexes_for_iso_transform] + 4) * (self.max_values - self.min_values)
+            ) / 8          
+        
+        # Transforming the training tensors
         if( self.perform_std_transform ):
             self.training_inputs = ( self.training_inputs*self.input_std_for_std + self.input_mean_for_std  )
             self.training_conditions[:,:-1] = ( self.training_conditions[:,:-1]*self.condition_std_for_std + self.condition_mean_for_std  )
@@ -317,18 +354,20 @@ class Simulation_correction():
             self.mc_test_conditions[:,:-1] = ( self.mc_test_conditions[:,:-1]*self.condition_std_for_std + self.condition_mean_for_std  )
 
             self.samples = ( self.samples*self.input_std_for_std + self.input_mean_for_std  )
-
-        # Now inverting the isolation transformation
-        counter = 0
-        for index in self.indexes_for_iso_transform:
             
-            # for the test dataset, we only have to transform the mc part
-            self.mc_test_inputs[:,index] = self.vector_for_iso_constructors_mc[counter].inverse_shift_and_sample(self.mc_test_inputs[:,index], processed = True)
+        # Now inverting the isolation transformation
+        if len(self.indexes_for_iso_transform) > 0:
+        
+            counter = 0
+            for index in self.indexes_for_iso_transform:
+                
+                # for the test dataset, we only have to transform the mc part
+                self.mc_test_inputs[:,index] = self.vector_for_iso_constructors_mc[counter].inverse_shift_and_sample(self.mc_test_inputs[:,index], processed = True)
 
-            # now transforming the 
-            self.samples[:,index] = self.vector_for_iso_constructors_mc[counter].inverse_shift_and_sample(self.samples[:,index], processed = True)
+                # now transforming the 
+                self.samples[:,index] = self.vector_for_iso_constructors_mc[counter].inverse_shift_and_sample(self.samples[:,index], processed = True)
 
-            counter = counter + 1
+                counter = counter + 1
 
     # energy raw should not be correct, So i am removing it from the inputs here! it is always the first entry in the tensor
     def remove_energy_raw_from_training(self):
@@ -382,56 +421,84 @@ class Simulation_correction():
         self.mc_test_conditions         = torch.tensor(torch.load( path_to_save_tensors + 'mc_test_conditions.pt')).clone().detach().to(self.device)
         self.mc_test_weights            = torch.tensor(torch.load( path_to_save_tensors + 'mc_test_weights.pt')).clone().detach().to(self.device) 
 
-# this is the class responsable for the isolation variables transformation
+
+# This class is responsible for the transformation of isolation variables
 class Make_iso_continuous:
-    def __init__(self, tensor, device, b = False):
-        
+    def __init__(self, tensor, device, shift=None):
+
         self.device = device
+        self.shift = shift if shift is not None else 0.05
 
-        #tensor = tensor.cpu()
-        self.iso_bigger_zero  = tensor > 0 
-        self.iso_equal_zero   = tensor == 0
-        #self.lowest_iso_value = torch.min( tensor[self.iso_bigger_zero] )
-        self.shift = 0.05 #era 0.05
-        if( b ):
-            self.shift = b
-        self.n_zero_events = torch.sum( self.iso_equal_zero )
+        # Clone the tensor to avoid modifying the original data
         self.before_transform = tensor.clone().detach()
-        #self.tensor_dtype = tensor.dtype()
 
-    #Shift the continous part of the continous distribution to (self.shift), and then sample values for the discontinous part
+        # Masks to identify zero and non-zero elements
+        self.iso_bigger_zero = tensor > 0
+        self.iso_equal_zero = tensor == 0
+
+        # Store the number of zero elements
+        self.n_zero_events = torch.sum(self.iso_equal_zero)
+
+        # Initialize lowest_iso_value (used in the inverse transformation)
+        self.lowest_iso_value = 0.0
+
+        # Placeholder for min and max values after log transform (used in inverse scaling)
+        self.tensor_min = None
+        self.tensor_max = None
+
     def shift_and_sample(self, tensor):
-        
-        # defining two masks to keep track of the events in the 0 peak and at the continous tails
-        bigger_than_zero      = tensor  > 0
-        tensor_zero           = tensor == 0
-        self.lowest_iso_value = 0.0 #torch.min( tensor[ bigger_than_zero ] )
+  
+        # Ensure the tensor is on the correct device
+        tensor = tensor.to(self.device)
 
-        tensor[ bigger_than_zero ] = tensor[ bigger_than_zero ] + self.shift -self.lowest_iso_value 
-        tensor[ tensor_zero ]      = torch.tensor(np.random.triangular( left = 0. , mode = 0, right = self.shift*0.98, size = tensor[tensor_zero].size()[0]   ), dtype = tensor[ tensor_zero ].dtype )
-        
-        # now a log trasform is applied on top of the smoothing to stretch the events in the 0 traingular and "kill" the iso tails
-        tensor = torch.log(  1e-3 + tensor ) 
-        
-        return tensor.to(self.device)
-    
-    #inverse operation of the above shift_and_sample transform
-    def inverse_shift_and_sample( self,tensor , processed = False):
-        #tensor = tensor.cpu()
-        tensor = torch.exp( tensor ) - 1e-3
+        # Masks to identify zero and non-zero elements
+        bigger_than_zero = tensor > 0
+        tensor_zero = tensor == 0
 
-        bigger_than_shift = tensor > self.shift
-        lower_than_shift  = tensor < self.shift
+        # For non-zero elements, shift the values
+        tensor[bigger_than_zero] = tensor[bigger_than_zero] + self.shift - self.lowest_iso_value
 
-        tensor[ lower_than_shift  ] = 0
-        tensor[ bigger_than_shift ] = tensor[ bigger_than_shift ] - self.shift + self.lowest_iso_value 
-        
+        # For zero elements, sample from a triangular distribution between 0 and self.shift * 0.98
+        if tensor_zero.any():
+            sampled_values = np.random.triangular(
+                left=0.0,
+                mode=0.0,
+                right=self.shift * 0.98,
+                size=tensor_zero.sum().item()
+            )
+            tensor[tensor_zero] = torch.from_numpy(sampled_values).to(self.device).type(tensor.dtype)
 
-        #making sure the inverse operation brough exaclty the same tensor back!
-        if( processed == True ):
-            pass
-        else:
-            assert (abs(torch.sum(  self.before_transform - tensor )) < tensor.size()[0]*1e-6 )
-            #added the tensor.size()[0]*1e-6 term due to possible numerical fluctioations!
-              
-        return tensor.to(self.device)
+        # Apply a small epsilon to avoid log(0)
+        epsilon = 1e-3
+
+        # Apply log transform to stretch the distribution
+        tensor = torch.log(epsilon + tensor)
+
+        return tensor
+
+    def inverse_shift_and_sample(self, tensor, processed=False):
+
+        # Ensure the tensor is on the correct device
+        tensor = tensor.to(self.device)
+
+        # Reverse the log transform
+        tensor = torch.exp(tensor) - 1e-3
+
+        # Masks to identify values after inverse log transform
+        bigger_than_shift = tensor >= self.shift
+        lower_than_shift = tensor < self.shift
+
+        # For values less than the shift, set them to zero
+        tensor[lower_than_shift] = 0.0
+
+        # For values greater than or equal to the shift, reverse the shift operation
+        tensor[bigger_than_shift] = tensor[bigger_than_shift] - self.shift + self.lowest_iso_value
+
+        # Ensure the inverse transformation recovers the original tensor
+        if not processed:
+            difference = torch.abs(self.before_transform - tensor)
+            max_difference = difference.max()
+            tolerance = 1e-5  # Adjust tolerance as needed
+            assert max_difference < tolerance, f"Max difference {max_difference} exceeds tolerance {tolerance}"
+
+        return tensor
