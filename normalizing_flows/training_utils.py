@@ -299,21 +299,21 @@ class Simulation_correction():
             self.mc_test_conditions[:,:-1] = ( self.mc_test_conditions[:,:-1] - self.condition_mean_for_std  )/self.condition_std_for_std
 
         # Lets apply min max scale to the variables that undergo the shift and scale transformation
-        self.max_values = self.training_inputs[  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ][:, self.indexes_for_iso_transform].max(dim=0).values
-        self.min_values = self.training_inputs[  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ][:, self.indexes_for_iso_transform].min(dim=0).values
+        self.max_values = self.training_inputs[  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ][:,self.indexes_for_iso_transform].max(dim=0).values
+        self.min_values = self.training_inputs[  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ][:,self.indexes_for_iso_transform].min(dim=0).values
 
         if len(self.indexes_for_iso_transform) > 0:
             # Apply min-max scaling to the range [-4, 4]
-            self.training_inputs[:, self.indexes_for_iso_transform] = -4 + (
-                (self.training_inputs[:, self.indexes_for_iso_transform] - self.min_values) * 8
+            self.training_inputs[:,self.indexes_for_iso_transform] = -5 + (
+                (self.training_inputs[:,self.indexes_for_iso_transform] - self.min_values) * 10
             ) / (self.max_values - self.min_values)
 
-            self.validation_inputs[:, self.indexes_for_iso_transform] = -4 + (
-                (self.validation_inputs[:, self.indexes_for_iso_transform] - self.min_values) * 8
+            self.validation_inputs[:,self.indexes_for_iso_transform] = -5 + (
+                (self.validation_inputs[:,self.indexes_for_iso_transform] - self.min_values) * 10
             ) / (self.max_values - self.min_values)
 
-            self.mc_test_inputs[:, self.indexes_for_iso_transform] = -4 + (
-                (self.mc_test_inputs[:, self.indexes_for_iso_transform] - self.min_values) * 8
+            self.mc_test_inputs[:,self.indexes_for_iso_transform] = -5 + (
+                (self.mc_test_inputs[:,self.indexes_for_iso_transform] - self.min_values) * 10
             ) / (self.max_values - self.min_values)
 
         # Lets now plot the distirbutions after the transformations
@@ -324,21 +324,21 @@ class Simulation_correction():
         
         if len(self.indexes_for_iso_transform) > 0:
             # Revert the min-max scaling from [-4, 4] back to original
-            self.training_inputs[:, self.indexes_for_iso_transform] = self.min_values + (
-                (self.training_inputs[:, self.indexes_for_iso_transform] + 4) * (self.max_values - self.min_values)
-            ) / 8
+            self.training_inputs[:,self.indexes_for_iso_transform] = self.min_values + (
+                (self.training_inputs[:,self.indexes_for_iso_transform] + 5) * (self.max_values - self.min_values)
+            ) / 10
 
-            self.validation_inputs[:, self.indexes_for_iso_transform] = self.min_values + (
-                (self.validation_inputs[:, self.indexes_for_iso_transform] + 4) * (self.max_values - self.min_values)
-            ) / 8
+            self.validation_inputs[:,self.indexes_for_iso_transform] = self.min_values + (
+                (self.validation_inputs[:,self.indexes_for_iso_transform] + 5) * (self.max_values - self.min_values)
+            ) / 10
 
-            self.mc_test_inputs[:, self.indexes_for_iso_transform] = self.min_values + (
-                (self.mc_test_inputs[:, self.indexes_for_iso_transform] + 4) * (self.max_values - self.min_values)
-            ) / 8  
+            self.mc_test_inputs[:,self.indexes_for_iso_transform] = self.min_values + (
+                (self.mc_test_inputs[:,self.indexes_for_iso_transform] + 5) * (self.max_values - self.min_values)
+            ) / 10  
             
-            self.samples[:, self.indexes_for_iso_transform] = self.min_values + (
-                (self.samples[:, self.indexes_for_iso_transform] + 4) * (self.max_values - self.min_values)
-            ) / 8          
+            self.samples[:,self.indexes_for_iso_transform] = self.min_values + (
+                (self.samples[:,self.indexes_for_iso_transform] + 5) * (self.max_values - self.min_values)
+            ) / 10          
         
         # Transforming the training tensors
         if( self.perform_std_transform ):

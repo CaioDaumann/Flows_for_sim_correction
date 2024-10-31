@@ -45,7 +45,7 @@ def perform_reweighting(simulation_df, data_df):
     # Defining the reweigthing binning! - Bins were chossen such as each bin has ~ the same number of events
     pt_bins  = calculate_bins_position(np.array(simulation_df["probe_pt"]), 30)
     eta_bins = calculate_bins_position(np.array(simulation_df["probe_ScEta"]), 30)
-    rho_bins = calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 40) #np.linspace( 5,65, 30) #calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 70)
+    rho_bins = calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 30) #np.linspace( 5,65, 30) #calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 70)
 
     bins = [ pt_bins , eta_bins, rho_bins ]
 
@@ -190,7 +190,6 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
     torch.save( mc_training_weights      , path_to_save_tensors + 'mc_training_weights.pt') 
 
     # now the validation tensors
-
     torch.save( data_validation_inputs       , path_to_save_tensors + 'data_validation_inputs.pt' )
     torch.save( data_validation_conditions   , path_to_save_tensors + 'data_validation_conditions.pt')
     torch.save( data_validation_weights      , path_to_save_tensors + 'data_validation_weights.pt') 
