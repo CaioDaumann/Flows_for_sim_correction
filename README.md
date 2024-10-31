@@ -15,8 +15,8 @@ HoverE is a example of distirbution not well modeled and that needs to be correc
 
 
 <div style="display: flex; justify-content: space-between;">
-  <img src="./plot/probe_hoe.png" width="48%">
-  <img src="./plot/mvaID_barrel.png" width="48%">
+  <img src="./plot/CMS-PAS-HIG-23-014_Figure_002-c.png" width="48%">
+  <img src="./plot/CMS-PAS-HIG-23-014_Figure_002-d.png" width="48%">
 </div>
 
 ## Usage
