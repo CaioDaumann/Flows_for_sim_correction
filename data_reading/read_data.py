@@ -10,107 +10,106 @@ import pandas as pd
 
 # importing other scripts
 import plot.plot_utils        as plot_utils
+import data_reading.zmmg_utils as zmmg_utils
 
-# Function to perform a selection in the samples
-def perform_zee_selection( data_df, mc_df ):
-    # first we need to calculathe the invariant mass of the electron pair
 
-    # variables names used to calculate the mass 
-    mass_vars = ["tag_pt","tag_ScEta","tag_phi","probe_pt","probe_ScEta","probe_phi","fixedGridRhoAll", "tag_mvaID"]
+def calculate_bins_position(array, num_bins=12):
 
-    mass_inputs_data = np.array( data_df[mass_vars]) 
-    mass_inputs_mc   = np.array( mc_df[mass_vars]  )
-
-    # calculaitng the invariant mass with the expression of a par of massless particles 
-    mass_data = np.sqrt(  2*mass_inputs_data[:,0]*mass_inputs_data[:,3]*( np.cosh(  mass_inputs_data[:,1] -  mass_inputs_data[:,4]  )  - np.cos( mass_inputs_data[:,2]  -mass_inputs_data[:,5] )  )  )
-    mass_mc   = np.sqrt(  2*mass_inputs_mc[:,0]*mass_inputs_mc[:,3]*( np.cosh(  mass_inputs_mc[:,1] -  mass_inputs_mc[:,4]  )  - np.cos( mass_inputs_mc[:,2]  -mass_inputs_mc[:,5] )  )  )
-
-    # now, in order to perform the needed cuts two masks will be created
-    mask_data = np.logical_and( mass_data > 80 , mass_data < 100  )
-    mask_data = np.logical_and( mask_data , mass_inputs_data[:,0] > 40  ) #tag pt cut
-    mask_data = np.logical_and( mask_data , mass_inputs_data[:,3] > 20  ) #probe pt cut
-    mask_data = np.logical_and( mask_data , np.abs(mass_inputs_data[:,4]) < 2.5  )  # eta cut
-    mask_data = np.logical_and( mask_data , np.abs(mass_inputs_data[:,5]) < 3.1415  ) # phi cut
-    mask_data = np.logical_and( mask_data , mass_inputs_data[:,6] < 100  )
-    mask_data = np.logical_and( mask_data , mass_inputs_data[:,6] > 0  )
-    mask_data = np.logical_and( mask_data , mass_inputs_data[:,7] > 0.0  )  # tag mvaID cut
+    array_sorted = np.sort(array)  # Ensure the array is sorted
+    n = len(array)
     
-
-    mask_mc   = np.logical_and( mass_mc > 80 , mass_mc < 100  )
-    mask_mc   = np.logical_and( mask_mc , mass_inputs_mc[:,0] > 40  )
-    mask_mc   = np.logical_and( mask_mc , mass_inputs_mc[:,3] > 20  )
-    mask_mc   = np.logical_and( mask_mc , np.abs(mass_inputs_mc[:,4]) < 2.5  )
-    mask_mc   = np.logical_and( mask_mc , np.abs(mass_inputs_mc[:,5]) < 3.1415  )
-    mask_mc   = np.logical_and( mask_mc , mass_inputs_mc[:,6] > 0  )
-    mask_mc   = np.logical_and( mask_mc , mass_inputs_mc[:,6] < 100  )
-    mask_mc   = np.logical_and( mask_mc , mass_inputs_mc[:,7] > 0.0  )
-
-    # return the masks for further operations
-    return mask_data, mask_mc
-
-def perform_zee_kinematics_reweighting(data_array, data_weights, mc_array, mc_weights):
+    # Calculate the exact number of elements per bin
+    elements_per_bin = n // num_bins
     
-    # As a first step, we will normalize the sum of weights to one!
-    data_weights = np.array(data_weights/np.sum(data_weights))
-    mc_weights   = np.array(mc_weights/np.sum( mc_weights ))
-
-    # I cannot slice pandas df, so I am making them into numpy arrays
-    data_array = np.array( data_array )
-    mc_array   = np.array( mc_array )
-
-    variable_names = [ "pt", "eta", "phi", "rho" ]
-
-    #defining the range where the rw will be performed in each variables
-    pt_min,pt_max   = 20, 120
-    rho_min,rho_max = 5.0,60.0
-    eta_min,eta_max = -2.501,2.501
-    phi_min, phi_max = -3.15,3.15
-
-    # now the number of bins in each distribution
-    pt_bins,rho_bins,eta_bins,phi_bins = 10, 32, 12, 2 #was 20, 30, 10, 4
-
-    # Now we create a 4d histogram of this kinematic variables
-    mc_histo,   edges = np.histogramdd( sample =  (mc_array[:,0] ,   mc_array[:,3],      mc_array[:,1], mc_array[:,2])   , bins = (pt_bins,rho_bins,eta_bins,phi_bins), range = [   [pt_min,pt_max], [ rho_min, rho_max ],[eta_min,eta_max], [phi_min,phi_max]  ], weights = mc_weights )
-    data_histo, edges = np.histogramdd( sample =  (data_array[:,0] , data_array[:,3] , data_array[:,1], data_array[:,2]) , bins = (pt_bins,rho_bins,eta_bins,phi_bins), range = [   [pt_min,pt_max], [ rho_min, rho_max ],[eta_min,eta_max], [phi_min,phi_max]  ], weights = data_weights )
-
-    #we need to have a index [i,j] to each events, so we can rewighht based on data[i,j]/mc[i,j]
-    pt_index =  np.array(pt_bins   *( mc_array[:,0] -  pt_min )/(pt_max - pt_min)   , dtype=np.int8 )
-    rho_index = np.array(rho_bins  *( mc_array[:,3] - rho_min )/(rho_max - rho_min) , dtype=np.int8 )
-    eta_index = np.array(eta_bins  *( mc_array[:,1] - eta_min )/(eta_max - eta_min) , dtype=np.int8 )
-    phi_index = np.array(phi_bins  *( mc_array[:,2] - phi_min )/(phi_max - phi_min) , dtype=np.int8 )
+    # Adjust bin_indices to accommodate for numpy's 0-indexing and avoid out-of-bounds access
+    bin_indices = [i*elements_per_bin for i in range(1, num_bins)]
     
-    #if a event has a pt higher than the pt_max it will have a higher index and will overflow the histogram. So i clip it to the last value 
-    pt_index[ pt_index > pt_bins - 1 ]  = pt_bins - 1
-    pt_index[ pt_index <= 0 ] = 0
+    # Find the array values at these adjusted indices
+    bin_edges = array_sorted[bin_indices]
 
+    bin_edges = np.insert(bin_edges, 0, np.min(array))
+    bin_edges = np.append(bin_edges, np.max(array))
+    
+    return bin_edges
 
-    rho_index[rho_index > rho_bins - 1 ] = rho_bins - 1
-    rho_index[rho_index <= 0 ] = 0
+# Due to the diferences in the kinematic distirbutions of the data and MC a reweithing must be performed to account for this
+def perform_reweighting(simulation_df, data_df):
+    
+    # Reading and normalizing the weights
+    mc_weights = np.array(simulation_df["weight"])
+    mc_weights = mc_weights/np.sum( mc_weights )
 
-    eta_index[eta_index > eta_bins - 1 ] = eta_bins - 1
-    eta_index[eta_index <= 0 ] = 0
+    data_weights = np.ones(len(data_df["probe_pt"]))
+    data_weights = data_weights/np.sum( data_weights )
 
-    phi_index[phi_index > phi_bins - 1 ] = phi_bins - 1
-    phi_index[phi_index <= 0 ] = 0
+    # Defining the reweigthing binning! - Bins were chossen such as each bin has ~ the same number of events
+    pt_bins  = calculate_bins_position(np.array(simulation_df["probe_pt"]), 30)
+    eta_bins = calculate_bins_position(np.array(simulation_df["probe_ScEta"]), 30)
+    rho_bins = calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 30) #np.linspace( 5,65, 30) #calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 70)
 
-    #calculating the SF
-    sf_rw = ( data_histo[  pt_index, rho_index,eta_index, phi_index ] )/(mc_histo[pt_index, rho_index,eta_index, phi_index] + 1e-10 )
-    sf_rw[ sf_rw > 10 ] = 10 # if the sf_rw is too big, we clip it to remove artifacts
+    bins = [ pt_bins , eta_bins, rho_bins ]
 
-    mc_weights = mc_weights* sf_rw
+    # Calculate 3D histograms
+    data1 = [ np.array(simulation_df["probe_pt"]) , np.array(simulation_df["probe_ScEta"]) , np.array(simulation_df["fixedGridRhoAll"])]
+    data2 = [ np.array(data_df["probe_pt"])       , np.array(data_df["probe_ScEta"])       , np.array(data_df["fixedGridRhoAll"])]
 
-    # return the mc and data weights. I am return the data one here because he is now normalized
-    return data_weights, mc_weights
+    hist1, edges = np.histogramdd(data1, bins=bins  , weights=mc_weights   , density=True)
+    hist2, _     = np.histogramdd(data2, bins=edges , weights=data_weights , density=True)
 
-# this function prepare teh data to be used bu pytorch!
+    # Compute reweighing factors
+    reweight_factors = np.divide(hist2, hist1, out=np.zeros_like(hist1), where=hist1!=0)
+
+    # Find bin indices for each point in data1
+    bin_indices = np.vstack([np.digitize(data1[i], bins=edges[i]) - 1 for i in range(3)]).T
+
+    # Ensure bin indices are within valid range
+    for i in range(3):
+        bin_indices[:,i] = np.clip(bin_indices[:,i], 0, len(edges[i]) - 2  )
+        
+    # Apply reweighing factors
+    simulation_weights = mc_weights * reweight_factors[bin_indices[:,0], bin_indices[:,1], bin_indices[:,2]]
+
+    # normalizing both to one!
+    data_weights       = data_weights/np.sum( data_weights )
+    simulation_weights = simulation_weights/np.sum( simulation_weights )
+
+    return data_weights, simulation_weights
+
+def perform_zee_selection(df):
+    # Define individual selection criteria
+    mass_criteria = (df["mass"] > 80) & (df["mass"] < 100)
+    tag_pt_criteria = df["tag_pt"] > 40
+    probe_pt_criteria = df["probe_pt"] > 22
+    eta_criteria = np.abs(df["probe_ScEta"]) < 2.5
+    phi_criteria = np.abs(df["probe_phi"]) < np.pi
+    tag_mvaID_criteria = df["tag_mvaID"] > 0.0
+    
+    # Combine all criteria into a single mask
+    mask = (
+        mass_criteria &
+        tag_pt_criteria &
+        probe_pt_criteria &
+        eta_criteria &
+        phi_criteria &
+        tag_mvaID_criteria
+    )
+    
+    # Apply mask to filter DataFrame
+    return df[mask]
+
+# This function prepare teh data to be used bu pytorch!
 def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars, condition_vars):
 
-    # creating the inputs and conditions tensors! - adding the bollean to the conditions tensors
-    data_inputs     = torch.tensor(np.array(data_df[input_vars]))
-    data_conditions = torch.tensor(np.concatenate( [  np.array( data_df[condition_vars]), np.ones( len( data_weights )  ).reshape(-1,1)  ], axis = 1  ) )
+    mc_inputs     = torch.tensor(np.array( np.nan_to_num(mc_df[input_vars])))
+    mc_conditions = torch.tensor(np.concatenate( [  np.array( np.nan_to_num(mc_df[condition_vars])), 0*np.ones( len( mc_weights )  ).reshape(-1,1)  ], axis = 1  ) )
 
-    mc_inputs     = torch.tensor(np.array(mc_df[input_vars]))
-    mc_conditions = torch.tensor(np.concatenate( [  np.array( mc_df[condition_vars]), 0*np.ones( len( mc_weights )  ).reshape(-1,1)  ], axis = 1  ) )
+    input_vars_data = input_vars
+    for i in range( len(input_vars) ):
+        input_vars_data[i] = input_vars_data[i].replace('_raw','')
+
+    # creating the inputs and conditions tensors! - adding the bollean to the conditions tensors
+    data_inputs     = torch.tensor(np.nan_to_num(np.array(data_df[input_vars_data])))
+    data_conditions = torch.tensor(np.concatenate( [ np.nan_to_num(np.array( data_df[condition_vars])), np.ones( len( data_weights )  ).reshape(-1,1)  ], axis = 1  ) )
 
     #first we shuffle all the arrays!
     permutation = np.random.permutation(len(data_weights))
@@ -118,21 +117,38 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
     data_conditions  = torch.tensor(data_conditions[permutation])
     data_weights     = torch.tensor(data_weights[permutation])
 
-    permutation = np.random.permutation(len(mc_weights))
-    mc_inputs      = torch.tensor(mc_inputs[permutation])
-    mc_conditions  = torch.tensor(mc_conditions[permutation])
-    mc_weights     = torch.tensor(mc_weights[permutation])
+    mc_permutation = np.random.permutation(len(mc_weights))
+    mc_inputs      = torch.tensor(mc_inputs[mc_permutation])
+    mc_conditions  = torch.tensor(mc_conditions[mc_permutation])
+    mc_weights     = torch.tensor(mc_weights[mc_permutation])
 
-    # Now, in ordert not to bias the network we choose make sure the tensors of data and simulation have the same number of events
-    mc_inputs = mc_inputs[ :len(data_inputs) ]
-    mc_conditions = mc_conditions[ :len(data_inputs) ]
-    mc_weights = mc_weights[ :len(data_inputs) ]
-    
-    assert len( mc_weights )    == len( data_weights )
-    assert len( mc_conditions ) == len(data_conditions)
+    assert abs(torch.sum(mc_weights) - torch.sum(data_weights)) < 1
+
+    # Now, in order not to bias the network we choose make sure the tensors of data and simulation have the same number of events
+    try:
+        mc_inputs = mc_inputs[ :len(data_inputs) ]
+        mc_conditions = mc_conditions[ :len(data_inputs) ]
+        mc_weights = mc_weights[ :len(data_inputs) ]
+        
+        assert len( mc_weights )    == len( data_weights )
+        assert len( mc_conditions ) == len(data_conditions)
+    except:
+        data_inputs = data_inputs[ :len(mc_inputs) ]
+        data_conditions = data_conditions[ :len(mc_inputs) ]
+        data_weights = data_weights[ :len(mc_inputs) ]
+        
+        assert len( mc_weights )    == len( data_weights )
+        assert len( mc_conditions ) == len(data_conditions)
+
+    # lets normalize the weights here again just to be sure ....
+    mc_weights = len(data_weights)*mc_weights/torch.sum(mc_weights)
+
+    assert abs(torch.sum(mc_weights) - torch.sum(data_weights)) < 1
+
+    print( 'Number of MC events after equiparing! ', len( mc_conditions ), ' Number of data events: ', len(data_conditions))
 
     training_percent = 0.7
-    validation_percent = 0.05 + training_percent
+    validation_percent = 0.03 + training_percent
     testing_percet = 1 - training_percent - validation_percent
 
     # Now, the fun part! - Separating everyhting into trainnig, validation and testing datasets!
@@ -174,7 +190,6 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
     torch.save( mc_training_weights      , path_to_save_tensors + 'mc_training_weights.pt') 
 
     # now the validation tensors
-
     torch.save( data_validation_inputs       , path_to_save_tensors + 'data_validation_inputs.pt' )
     torch.save( data_validation_conditions   , path_to_save_tensors + 'data_validation_conditions.pt')
     torch.save( data_validation_weights      , path_to_save_tensors + 'data_validation_weights.pt') 
@@ -194,107 +209,61 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
 
     return path_to_save_tensors
 
-def read_zee_data():
+def read_zee_data(var_list, conditions_list, data_samples_path, mc_samples_path, mc_samples_lumi_norm, DokinematicsRW):
 
-    # We want to correct the variables that are used as input to run3 photon MVA ID
-    var_list = ["probe_energyRaw",
-                "probe_r9", 
-                "probe_sieie",
-                "probe_etaWidth",
-                "probe_phiWidth",
-                "probe_sieip",
-                "probe_s4",
-                "probe_hoe",
-                "probe_ecalPFClusterIso",
-                "probe_trkSumPtHollowConeDR03",
-                "probe_trkSumPtSolidConeDR04",
-                "probe_pfChargedIso",
-                "probe_pfChargedIsoWorstVtx",
-                "probe_esEffSigmaRR",
-                "probe_esEnergyOverRawE",
-                "probe_hcalPFClusterIso",
-                "probe_energyErr"]
-    
-    # These variables will be used as conditions to the normalizing flow - they will not be transformed!
-    conditions_list = [ "probe_pt","probe_ScEta","probe_phi","fixedGridRhoAll"]
-
-    # If true read nanoAODv13 (high precision) , else v12 (low precision)
-    read_nano_v13 = True
-    if( read_nano_v13 ):
-
-        path_to_data =  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/"
-
-        # Lets now read the data and simultion as pandas dataframes
-        files_DY_mc  = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/DY_postEE_v13/nominal/*.parquet")
-        files_DY_mc = files_DY_mc[:300]
-        simulation   = [pd.read_parquet(f) for f in files_DY_mc]
-        drell_yan_df = pd.concat(simulation,ignore_index=True)
-
-        # now the data files for the epochs F and G
-        files_DY_data_E = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataE_v13/nominal/*.parquet")
-        files_DY_data_E = files_DY_data_E[:300]
-
-        files_DY_data_F = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataF_v13/nominal/*.parquet")
-        files_DY_data_F = files_DY_data_F[:300]
-
-        files_DY_data_G  = glob.glob(  "/net/scratch_cms3a/daumann/HiggsDNA/v13_samples_2/dataG_v13/nominal/*.parquet")
-        files_DY_data_G = files_DY_data_G[:300]
-
-        # I think there is a problem with the samples above, lets test with the new samples!
-
-    else:
-        
-        path_to_data = "/net/scratch_cms3a/daumann/nanoAODv12_Production/"
-
-        # Lets now read the data and simultion as pandas dataframes
-        files_DY_mc  = glob.glob( path_to_data + "DY_postEE_v12/nominal/*.parquet")
-        files_DY_mc = files_DY_mc[:20]
-        simulation   = [pd.read_parquet(f) for f in files_DY_mc]
-        drell_yan_df = pd.concat(simulation,ignore_index=True)
-
-        # now the data files for the epochs F and G
-        files_DY_data_F = glob.glob( "/net/scratch_cms3a/daumann/nanoAODv12_Production/Data_Run2022F_v12/nominal/*.parquet")
-        files_DY_data_F = files_DY_data_F[:30]
-
-        files_DY_data_G  = glob.glob( "/net/scratch_cms3a/daumann/nanoAODv12_Production/Data_Run2022G_v12/nominal/*.parquet")
-        files_DY_data_G = files_DY_data_G[:30]
-
-    # merhging both dataframes
-    files_DY_data = [files_DY_data_E,files_DY_data_G,files_DY_data_F]
-
-    data   = [pd.read_parquet(f) for f in files_DY_data]
+    files_data = [  glob.glob( data_file ) for data_file in data_samples_path ]
+    data   = [pd.read_parquet(f) for f in files_data]
     data_df = pd.concat(data,ignore_index=True)
-    # end of data reading!
 
+    files_mc = []
+    for sample, lumi_norm in zip(mc_samples_path,mc_samples_lumi_norm ):
+        
+        files = glob.glob( sample )
+        files_list = [pd.read_parquet(f) for f in files]
+        files_df = pd.concat(files_list, ignore_index=True)
+        
+        # Apply the luminosity normalization
+        files_df["weight"] = files_df["weight"]*lumi_norm
+        
+        # Append the processed DataFrame to the list
+        files_mc.append(files_df)
+
+    # Concatenate all files_df into a single DataFrame after the loop
+    drell_yan_df = pd.concat(files_mc, ignore_index=True)
+        
     # Now that the data is read, we need to perform a loose selection with the objective of decrease teh background contamination
-    # The cuts include:
-    # Mass windown cut: We only select events in a tight mass window around the Z peak [80,100]
-    # Select event with eta < 2.5
-    # loose tag mvaID cut of 0.0. Since the training is performed in probe electrons we dont expect a bias
-    # The selection will be done in the perform_zee_selection() function
-    mask_data, mask_mc = perform_zee_selection( data_df, drell_yan_df )
+    data_df = perform_zee_selection(data_df)
+    drell_yan_df = perform_zee_selection(drell_yan_df)
 
-    # Switch to decide if reweihting is used or no!
-    perform_reweithing = True
+    # lets keep the MC weights before rw for validation
+    mc_weights_before = drell_yan_df["weight"].values
 
-    # now, due to diferences in kinematics, a rewighting in the four kinematic variables [pt,eta,phi and rho] will be perform
-    mc_weights   = drell_yan_df["weight"]
-    mc_weights_before = mc_weights
-    data_weights = np.ones( len( data_df["fixedGridRhoAll"] ) )
+    # Lets now perform a kinematic reweigthing after selection
+    if( DokinematicsRW ):
+        data_df["weight"] ,drell_yan_df["weight"] = perform_reweighting(drell_yan_df, data_df)
     
-    if( perform_reweithing ):
-        data_weights, mc_weights = perform_zee_kinematics_reweighting(data_df[conditions_list][mask_data], data_weights[mask_data], drell_yan_df[conditions_list][mask_mc], mc_weights[mask_mc])
-    else:
-        data_weights, mc_weights = np.array(data_weights[mask_data])/np.sum( np.array(data_weights[mask_data]) ), np.array(mc_weights[mask_mc])/np.sum(np.array(mc_weights[mask_mc])) #perform_zee_kinematics_reweighting(data_df[conditions_list][mask_data], data_weights[mask_data], drell_yan_df[conditions_list][mask_mc], mc_weights[mask_mc])
-
+    # Normalizing the weoghts do data!
+    data_df["weight"]      = len(data_df["weight"])*data_df["weight"]/np.sum(data_df["weight"])
+    drell_yan_df["weight"] = len(data_df["weight"])*drell_yan_df["weight"]/np.sum(drell_yan_df["weight"])
+    mc_weights_before      = len(data_df["weight"])*mc_weights_before/np.sum(mc_weights_before)
+    
+    assert abs(np.sum(drell_yan_df["weight"]) - np.sum(data_df["weight"])) <= 1
+    
+    # Making the weigths into numpy arrays
+    mc_weights        = drell_yan_df["weight"].values
+    data_weights      = data_df["weight"].values
+    
+    assert np.sum(mc_weights ) - np.sum(data_weights) <= 1
+    
     # now lets call a plotting function to perform the plots of the read distributions for validation porpuses
-    path_to_plots = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/plot/validation_plots/"
+    path_to_plots = "./plot/validation_plots/reweighting_validation/"
 
     # now as a last step, we need to split the data into training, validation and test dataset
-    plot_utils.plot_distributions( path_to_plots, data_df[mask_data], drell_yan_df[mask_mc], mc_weights , [var_list, conditions_list], weights_befores_rw = mc_weights_before[mask_mc])
+    plot_utils.plot_distributions( path_to_plots, data_df, drell_yan_df, data_weights, mc_weights , [var_list, conditions_list], weights_before_rw = mc_weights_before)
 
     # now, the datsets will be separated into training, validation and test dataset, and saved for further reading by the training class!
-    separate_training_data(data_df[mask_data], drell_yan_df[mask_mc], mc_weights, data_weights, var_list, conditions_list)
+    separate_training_data(data_df, drell_yan_df, mc_weights, data_weights, var_list, conditions_list)
 
     print('\n End of data reading! - No errors encountered! ')
-    print( 'Number of MC events: ', len(drell_yan_df[mask_mc] ), ' Number of data events: ', len(data_df[mask_data]))
+    print( 'Number of MC events: ', len(drell_yan_df ), ' Number of data events: ', len(data_df))
+    

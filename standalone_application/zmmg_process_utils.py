@@ -78,7 +78,8 @@ def zmmg_selection(data_df,mc_df):
     mask_data = np.logical_and( mask_data, data[:,3] > 20 )
     mask_data = np.logical_and( mask_data, data[:,5] < 0.8 )
     mask_data = np.logical_and( mask_data, data[:,6] > 20 )
-    mask_data = np.logical_and( mask_data, data[:,7] < 9 ) #trk sum cut
+    #mask_data = np.logical_and( mask_data, data[:,5] > 0.4 )
+    #mask_data = np.logical_and( mask_data, data[:,7] < 9 ) #trk sum cut
     #mask_data = np.logical_and( mask_data, data[:,8] < 0.025 )
     
     mask_mc = np.logical_and(  mc[:,1] > 80 ,  mc[:,1] < 100 ) #mmy mass [80,100]
@@ -87,7 +88,8 @@ def zmmg_selection(data_df,mc_df):
     mask_mc = np.logical_and( mask_mc, mc[:,3] > 20 )
     mask_mc = np.logical_and( mask_mc, mc[:,5] < 0.8 )
     mask_mc = np.logical_and( mask_mc, mc[:,6] > 20 )
-    mask_mc = np.logical_and( mask_mc, mc[:,7] < 9 )     # trk sum cut
+    #mask_mc = np.logical_and( mask_mc, mc[:,5] > 0.4 )
+    #mask_mc = np.logical_and( mask_mc, mc[:,7] < 9 )     # trk sum cut
     #mask_mc = np.logical_and( mask_mc, mc[:,8] < 0.025 )
 
     return mask_data, mask_mc

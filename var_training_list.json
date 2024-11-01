@@ -1,0 +1,61 @@
+{
+    "var_list": [
+        "probe_energyRaw",
+        "probe_r9",
+        "probe_sieie",
+        "probe_etaWidth",
+        "probe_phiWidth",
+        "probe_sieip",
+        "probe_s4",
+        "probe_hoe",
+        "probe_ecalPFClusterIso",
+        "probe_trkSumPtHollowConeDR03",
+        "probe_trkSumPtSolidConeDR04",
+        "probe_pfChargedIso",
+        "probe_pfChargedIsoWorstVtx",
+        "probe_esEffSigmaRR",
+        "probe_esEnergyOverRawE",
+        "probe_hcalPFClusterIso",
+        "probe_energyErr"
+    ],
+    "var_list_barrel_only": [
+        "probe_energyRaw",
+        "probe_r9", 
+        "probe_sieie",
+        "probe_etaWidth",
+        "probe_phiWidth",
+        "probe_sieip",
+        "probe_s4",
+        "probe_hoe",
+        "probe_ecalPFClusterIso",
+        "probe_trkSumPtHollowConeDR03",
+        "probe_trkSumPtSolidConeDR04",
+        "probe_pfChargedIso",
+        "probe_pfChargedIsoWorstVtx",
+        "probe_energyErr"
+    ],
+    "conditions_list": [
+        "probe_pt",
+        "probe_ScEta",
+        "probe_phi",
+        "fixedGridRhoAll"
+    ],
+    "data_files": [
+        "/net/scratch_cms3a/daumann/HiggsDNA/scripts/2023_production/TnP/TnP_2023_full_samples/DataC_2023/nominal/*.parquet",
+        "/net/scratch_cms3a/daumann/HiggsDNA/scripts/2023_production/TnP/TnP_2023_full_samples/DataD_2023/nominal/*.parquet"
+    ],
+    "MC_files": [
+        "/net/scratch_cms3a/daumann/HiggsDNA/scripts/2023_production/TnP/TnP_2023_full_samples/DY_postBPIX/nominal/*.parquet",
+        "/net/scratch_cms3a/daumann/HiggsDNA/scripts/2023_production/TnP/TnP_2023_full_samples/DY_preBPIX/nominal/*.parquet"
+    ],
+    "MC_files_normalization": [
+        9.451,
+        17.794
+    ],
+    "Index_for_Iso_transform":  [
+        6,7,8,9,10,11,12,13,14
+    ],
+    "Iso_transform_shift": [
+        0.002, 0.05 , 0.05 , 0.05, 0.05, 0.05, 0.05, 0.05, 0.05
+    ]
+}

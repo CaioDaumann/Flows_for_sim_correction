@@ -8,29 +8,10 @@ import mplhep, hist
 plt.style.use([mplhep.style.CMS])
 import mplhep as hep
 import xgboost
-import os
+import matplotlib.patches as patches
 
 # Names of the used variables, I copied it here only so it is easier to use it acess the labels and names of teh distirbutions
 var_list = ["probe_energyRaw",
-                "probe_raw_r9", 
-                "probe_raw_sieie",
-                "probe_raw_etaWidth",
-                "probe_raw_phiWidth",
-                "probe_raw_sieip",
-                "probe_raw_s4",
-                "probe_raw_hoe",
-                "probe_raw_ecalPFClusterIso",
-                "probe_raw_trkSumPtHollowConeDR03",
-                "probe_raw_trkSumPtSolidConeDR04",
-                "probe_raw_pfChargedIso",
-                "probe_raw_pfChargedIsoWorstVtx",
-                "probe_raw_esEffSigmaRR",
-                "probe_raw_esEnergyOverRawE",
-                "probe_raw_hcalPFClusterIso",
-                "probe_raw_energyErr"]
-
-# some variables have value of zero in barrel, so we must exclude them. I created this matrix so it is easier to do that!
-var_list_matrix_barrel = ["probe_energyRaw",
             "probe_r9", 
             "probe_sieie",
             "probe_etaWidth",
@@ -43,8 +24,64 @@ var_list_matrix_barrel = ["probe_energyRaw",
             "probe_trkSumPtSolidConeDR04",
             "probe_pfChargedIso",
             "probe_pfChargedIsoWorstVtx",
+            "probe_esEffSigmaRR",
+            "probe_esEnergyOverRawE",
+            "probe_hcalPFClusterIso",
             "probe_energyErr"]
 
+
+# some variables have value of zero in barrel, so we must exclude them. I created this matrix so it is easier to do that!
+var_list_matrix_barrel = ["energyRaw",
+                          r'$p_{t}$',
+                          "r9", 
+                          "sieie",
+                          "etaWidth",
+                          "phiWidth",
+                          "sieip",
+                          "s4",
+                          "hoe",
+                          "ecalPFIso",
+                          "trkSumPtDR03",
+                          "trkSumPtDR04",
+                          "ChIsoWorstVtx",
+                          "EffSigmaRR",
+                          "EOverRawE",
+                          "hcalPFIso"]
+
+"""
+data_var_list    = ["probe_energyRaw",
+                    "probe_r9", 
+                    "probe_sieie",
+                    "probe_etaWidth",
+                    "probe_phiWidth",
+                    "probe_sieip",
+                    "probe_s4",
+                    "probe_hoe",
+                    "probe_ecalPFClusterIso",
+                    "probe_trkSumPtHollowConeDR03",
+                    "probe_trkSumPtSolidConeDR04",
+                    "probe_pfChargedIsoWorstVtx",
+                    "probe_esEffSigmaRR",
+                    "probe_esEnergyOverRawE",
+                    "probe_hcalPFClusterIso",
+                    "probe_energyErr"
+                    ]
+"""
+corr_mva_list     = [   "probe_energyRaw",
+                    "probe_corr_r9", 
+                    "probe_corr_sieie",
+                    "probe_corr_etaWidth",
+                    "probe_corr_phiWidth",
+                    "probe_corr_sieip",
+                    "probe_corr_s4",
+                    "probe_corr_hoe",
+                    "probe_corr_ecalPFClusterIso",
+                    "probe_corr_trkSumPtHollowConeDR03",
+                    "probe_corr_trkSumPtSolidConeDR04",
+                    "probe_corr_pfChargedIso",
+                    "probe_corr_pfChargedIsoWorstVtx",
+                    "probe_ScEta",
+                    "fixedGridRhoAll"]
 
 # The next three functions are related to the plotting of the profiles of the MVA as a function of the kinematical variables
 # This function calculate the means of the input quantiles! - Weighted mean, of couse.
@@ -65,7 +102,8 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
     
     # Fill the area with hatched grey lines until 0.25 on the x-axis
     if( "mva" in str(xlabel) and 1 == 2  ):
-           
+        
+            
         # Define the x and y ranges for the greyed out region
         x_start, x_end = -0.9, 0.25
         #y_start, y_end = 0, 2.0  # Adjust the y range as needed
@@ -117,7 +155,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
             )
 
     # Apply hatching to the filled area
-    # ax.patches[0].set_hatch('/')  # Apply hatching pattern to the filled area
+    #ax.patches[0].set_hatch('/')  # Apply hatching pattern to the filled area
 
     hep.histplot(
             data_hist,
@@ -134,32 +172,37 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
             flow='sum'
         )
 
+
     ax[0].set_xlabel('')
     ax[0].margins(y=0.15)
     ax[0].set_ylim(0, 1.15*ax[0].get_ylim()[1])
     ax[0].tick_params(labelsize=22)
 
-    # Log scale for Iso variables
+    #log scale for Iso variables
+    #if ('ecal' not in str(xlabel) or 'hcal' not in str(xlabel) ):
+    #    pass
     if( "Iso" in str(xlabel) or "DR" in str(xlabel) or "esE" in str(xlabel)  ): # or 'r9' in str(xlabel) or 's4' in str(xlabel)
         ax[0].set_yscale('log')
         #ax[0].set_ylim(0.001,( np.max(data_hist)/1.5e6 ))
         ax[0].set_ylim(0.001, 12.05*ax[0].get_ylim()[1])
         
-    # Line at 1
+
+    # line at 1
     ax[1].axhline(1, 0, 1, label=None, linestyle='--', color="black", linewidth=1)#, alpha=0.5)
 
+    #ratio
     data_hist_numpy = data_hist.to_numpy()
     mc_hist_numpy   = mc_hist.to_numpy()
     mc_hist_rw_numpy   = mc_rw_hist.to_numpy()
 
-    integral_data = data_hist.sum() * (data_hist_numpy[1][1] - data_hist_numpy[1][0])
-    integral_mc = mc_hist.sum() * (mc_hist_numpy[1][1] - mc_hist_numpy[1][0])
+    integral_data = data_hist.sum().value * (data_hist_numpy[1][1] - data_hist_numpy[1][0])
+    integral_mc = mc_hist.sum().value * (mc_hist_numpy[1][1] - mc_hist_numpy[1][0])
 
-    # Ratio betwenn normalizng flows prediction and data
+    #ratio betwenn normalizng flows prediction and data
     ratio = (data_hist_numpy[0] / integral_data) / ( (mc_hist_numpy[0] + 1e-15 ) / integral_mc)
     ratio = np.nan_to_num(ratio)
 
-    integral_mc_rw = mc_rw_hist.sum() * (mc_hist_rw_numpy[1][1] - mc_hist_rw_numpy[1][0])
+    integral_mc_rw = mc_rw_hist.sum().value * (mc_hist_rw_numpy[1][1] - mc_hist_rw_numpy[1][0])
     ratio_rw = (data_hist_numpy[0] / integral_data) / ( (mc_hist_rw_numpy[0] +1e-15 ) / integral_mc_rw)
     ratio_rw = np.nan_to_num(ratio_rw)
 
@@ -180,6 +223,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
         xerr=True,
     )
 
+
     hep.histplot(
         ratio_rw,
         bins=data_hist_numpy[1],
@@ -194,15 +238,22 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
         xerr=True,
     )
 
+    #ax[0].text(0.001, 0.99, "Barrel",
+    #     fontsize=26)
+
     bin_width = round(data_hist.axes[0].edges[1] - data_hist.axes[0].edges[0],2)
     if "hoe" in str(xlabel):
         bin_width = round(data_hist.axes[0].edges[1] - data_hist.axes[0].edges[0],3)
     
     if( "Err" in str(xlabel) ):
+        #ax[0].set_ylabel(f"Fraction of events / ({bin_width} GeV)", fontsize=26)
         ax[0].set_ylabel("a.u", fontsize=30)
     else:
+        #ax[0].set_ylabel(f"Fraction of events / {bin_width}", fontsize=26)
         ax[0].set_ylabel("a.u", fontsize=30)
     
+    #ax[1].set_ylabel("Data / MC", fontsize=26)
+    #ax.set_xlabel( str(xlabel), fontsize=26)
     ax[1].set_ylabel("Data / MC", fontsize=26)
     
     if( "mva" in str(xlabel)  ):
@@ -219,10 +270,15 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
         ax[1].set_xlabel( str(xlabel_new) , fontsize=26)
     
     ax[0].tick_params(labelsize=24)
-
+    #ax.set_ylim(0., 1.1*ax.get_ylim()[1])
     ax[1].set_ylim(0.79, 1.21)
     if( 'mva' in xlabel ):
         ax[1].set_ylim(0.79, 1.21)
+
+    
+    #ax[0].legend(
+    #    loc="upper right", fontsize=20
+    #)
 
     # Create a custom legend handle to show a line
     from matplotlib.lines import Line2D
@@ -236,16 +292,22 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
 
     # Add the legend with the modified handles
     ax[0].legend(handles=handles, labels=labels, loc="upper right", fontsize=20)
-    ax[0].text(0.05, 0.96, r'$\mathcal{Z}\rightarrow e^{+}e^{-}$', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
 
+    ax[0].text(0.05, 0.96, r'$\mathcal{Z}\rightarrow e^{+}e^{-}$', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
+    #if( 'mva' in xlabel ):
     if( endcap ):
             #ax[0].text(0.05, 0.95, r'|$\eta$| > 1.566', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
             ax[0].text(0.05, 0.9, r'EE photons', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
     else:
             ax[0].text(0.05, 0.90, r'EB photons', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
             #ax[0].text(0.05, 0.95, r'|$\eta$| < 1.442', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
+    #else:
+    #ax[0].text(0.05, 0.9, r'EB+EE photons', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
+    #ax[0].text(0.05, 0.95, r'|$\eta$| < 2.5', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
+
+    #mplhep.cms.text( loc = 1, ax = ax[0],  )
  
-    hep.cms.label(data=True, ax=ax[0], loc=0, label = "Preliminary", com=13.6, lumi = 27.24)
+    hep.cms.label(data=True, ax=ax[0], loc=0, label = "Preliminary", com=13.6, lumi = 27.0)
 
     # Remove the space between the subplots
     plt.subplots_adjust(hspace=0)
@@ -256,119 +318,72 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
     # Adjust the tight_layout to not add extra padding
     fig.tight_layout(h_pad=0, w_pad=0)
 
+
     fig.savefig(output_filename)
 
-def plot_distributions( path, data_df, mc_df, data_weights, mc_weights, variables_to_plot, weights_before_rw = False ):
 
-    # Ensure the output directory exists
-    os.makedirs(path, exist_ok=True)
+# This is a plot distribution suitable for dataframes, if one wants to plot tensors see "plot_distributions_for_tensors()"
+def plot_distributions( path, data_df, mc_df, mc_weights, variables_to_plot, weights_befores_rw = False ):
 
-    for variable_group in variables_to_plot:
-        for variable in variable_group:
-            # Clean the variable name by removing '_raw' if present
-            clean_variable = variable.replace('_raw', '')
+    for set in variables_to_plot:
 
-            # Extract data for the variable
-            data_values = data_df[clean_variable].dropna().values
-            mc_values = mc_df[variable].dropna().values
+        for key in set:
 
-            # Compute mean and standard deviation for data histogram binning
-            mean = np.mean(data_values)
-            std = np.std(data_values)
+            mean = np.mean( np.array(data_df[key]) )
+            std  = np.std(  np.array(data_df[key]) )
 
-            # Define histogram bin edges based on the variable name
-            if 'Iso' in variable or 'DR' in variable:
-                bin_edges = np.linspace(0.0, 3.5, 101)
-            elif 'hoe' in variable:
-                bin_edges = np.linspace(0.0, 0.08, 101)
+            if( 'Iso' in key or 'DR' in key   ):
+                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 1.5))
+                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 1.5))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 1.5))
+            elif( 'hoe' in  key ):
+                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 0.02))
+                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 0.02))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 0.02))
             else:
-                bin_min = mean - 3.0 * std
-                bin_max = mean + 4.0 * std
-                bin_edges = np.linspace(bin_min, bin_max, 101)
+                data_hist            = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(70, mean - 2.0*std, mean + 2.0*std))
 
-            # Create histograms
-            bins = hist.axis.Variable(bin_edges)
-            data_hist = hist.Hist(bins)
-            mc_hist = hist.Hist(bins)
-            mc_rw_hist = hist.Hist(bins)
-
-            # Fill histograms
-            data_hist.fill(data_values, weight=data_weights)
-            if weights_before_rw is not None:
-                mc_hist.fill(mc_values, weight=weights_before_rw)
+            data_hist.fill( np.array(data_df[key]   )  )
+            
+            if( len(weights_befores_rw)  ):
+                mc_hist.fill( np.array(  mc_df[key]), weight = weights_befores_rw )
             else:
-                mc_hist.fill(mc_values)
-            mc_rw_hist.fill(mc_values, weight=mc_weights)
+                mc_hist.fill( np.array(  mc_df[key]) )
 
-            # Plot and save the histograms
-            output_path = os.path.join(path, f"{variable}.png")
-            plott(data_hist, mc_hist, mc_rw_hist, output_path, xlabel=variable)
+            #print( np.shape( np.array(drell_yan_df[key]) ) , np.shape( mc_weights  ) )
 
-def plot_distributions_for_tensors(
-    data_tensor,
-    mc_tensor,
-    flow_samples,
-    mc_weights,
-    plot_path,
-    variables_list
-):
+            mc_rw_hist.fill( np.array(mc_df[key]) , weight = mc_weights )
 
-    # Ensure the output directory exists
-    os.makedirs(plot_path, exist_ok=True)
+            plott( data_hist , mc_hist, mc_rw_hist , 'plots_AR_model/' +  str(key) +".png", xlabel = str(key)  )
 
-    # Convert tensors to NumPy arrays if they are PyTorch tensors
-    if isinstance(data_tensor, torch.Tensor):
-        data_tensor = data_tensor.cpu().numpy()
-    if isinstance(mc_tensor, torch.Tensor):
-        mc_tensor = mc_tensor.cpu().numpy()
-    if isinstance(flow_samples, torch.Tensor):
-        flow_samples = flow_samples.cpu().numpy()
-    if isinstance(mc_weights, torch.Tensor):
-        mc_weights = mc_weights.cpu().numpy()
+def plot_distributions_for_tensors( data_tensor, mc_tensor, flow_samples, mc_weights, plot_path ):
 
-    n_features = data_tensor.shape[1]
-    n_variables = len(variables_list)
-    if n_features != n_variables:
-        raise ValueError("Number of features in data_tensor does not match length of variables_list.")
+    for i in range( np.shape( data_tensor )[1] ):
 
-    for i in range(n_features):
-        variable_name = variables_list[i]
+            mean = np.mean( np.array(data_tensor[:,i]) )
+            std  = np.std(  np.array(data_tensor[:,i]) )
 
-        # Extract data for the variable
-        data_values = data_tensor[:, i]
-        mc_values = mc_tensor[:, i]
-        flow_values = flow_samples[:, i]
+            if( 'Iso' in str(var_list[i]) or 'DR' in str(var_list[i]) or 'esE' in str(var_list[i]) or 'hoe' in str(var_list[i]) or 'energy' in str(var_list[i])  ):
+                data_hist            = hist.Hist(hist.axis.Regular(50, 0.0 , mean + 2.0*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(50, 0.0 , mean + 2.0*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(50, 0.0 , mean + 2.0*std))
+            else:
+                data_hist            = hist.Hist(hist.axis.Regular(50, mean - 2.5*std, mean + 2.5*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(50, mean - 2.5*std, mean + 2.5*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(50, mean - 2.5*std, mean + 2.5*std))
 
-        # Compute mean and standard deviation for data histogram binning
-        mean = np.mean(data_values)
-        std = np.std(data_values)
+            if( 'DR04' in str(var_list[i])  ):
+                data_hist            = hist.Hist(hist.axis.Regular(50, 0.0 , 5.0))
+                mc_hist              = hist.Hist(hist.axis.Regular(50, 0.0 , 5.0))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(50, 0.0 , 5.0))
 
-        # Determine histogram binning based on variable name
-        if any(substring in variable_name for substring in ['Iso', 'DR', 'esE', 'hoe', 'energy']):
-            bin_min = 0.0
-            bin_max = mean + 2.0 * std
-            # Special case for 'DR04'
-            if 'DR04' in variable_name:
-                bin_max = 5.0
-            bins = hist.axis.Regular(50, bin_min, bin_max)
-        else:
-            bin_min = mean - 2.5 * std
-            bin_max = mean + 2.5 * std
-            bins = hist.axis.Regular(50, bin_min, bin_max)
+            data_hist.fill( np.array(data_tensor[:,i]   )  )
+            mc_hist.fill(  np.array( mc_tensor[:,i]),  weight = 1e6*mc_weights )
+            mc_rw_hist.fill( np.array( flow_samples[:,i]) , weight = 1e6*mc_weights )
 
-        # Create histograms
-        data_hist = hist.Hist(bins)
-        mc_hist = hist.Hist(bins)
-        mc_rw_hist = hist.Hist(bins)
-
-        # Fill histograms
-        data_hist.fill(data_values)
-        mc_hist.fill(mc_values, weight=mc_weights)
-        mc_rw_hist.fill(flow_values, weight=mc_weights)
-
-        # Plot and save histograms
-        output_file = os.path.join(plot_path, f"{variable_name}.png")
-        plott(data_hist, mc_hist, mc_rw_hist, output_file, xlabel=variable_name)
+            plott( data_hist , mc_hist, mc_rw_hist , plot_path +  str(var_list[i]) +".png", xlabel = str(var_list[i])  )
 
 def plot_loss_cruve(training,validation, plot_path):
 
@@ -389,9 +404,9 @@ def plot_loss_cruve(training,validation, plot_path):
         plt.savefig( plot_path + 'loss_plot.png') 
         plt.close()
 
-def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights, plot_path):
+def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights, plot_path, zmmg = False, postEE = True):
     
-    model_path = './run3_mvaID_models/'
+    model_path = '/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/run3_mvaID_models/'
 
     photonid_mva = xgboost.Booster()
     photonid_mva.load_model( model_path + "model.json" )
@@ -422,23 +437,42 @@ def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_condit
     nl_mvaID   = 1 - (2/(1+np.exp( 2*nl_mvaID )))
     mc_mvaID   = 1 - (2/(1+np.exp( 2*mc_mvaID )))
 
-    plot_profile_barrel( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
+    # Lets not do this one for now!
+    #plot_profile_barrel( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path, zmmg = zmmg)
 
     # now, we create and fill the histograms with the mvaID distributions
-    mc_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
-    nl_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
-    data_mva    = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
-
-    mc_mva.fill( mc_mvaID, weight = (1e6)*mc_weights )
-    nl_mva.fill( nl_mvaID, weight = (1e6)*mc_weights )
-    data_mva.fill( data_mvaID, weight = (1e6)*data_weights  )
-
-    plott( data_mva , mc_mva, nl_mva , plot_path + '/mvaID_barrel.png', xlabel = "Barrel mvaID"  )
-
-
-def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights, plot_path):
     
-    model_path = './run3_mvaID_models/'
+    if( zmmg ):
+        mc_mva      = hist.Hist(hist.axis.Regular(7, -0.9, 1.0))
+        nl_mva      = hist.Hist(hist.axis.Regular(7, -0.9, 1.0))
+        data_mva    = hist.Hist(hist.axis.Regular(7, -0.9, 1.0))
+    else:
+        mc_mva      = hist.Hist(hist.axis.Regular(8, -0.9, 1.0))
+        nl_mva      = hist.Hist(hist.axis.Regular(8, -0.9, 1.0))
+        data_mva    = hist.Hist(hist.axis.Regular(8, -0.9, 1.0))
+
+    if( postEE ):
+        mc_mva      = hist.Hist(hist.axis.Regular(12, -0.9, 1.0))
+        nl_mva      = hist.Hist(hist.axis.Regular(12, -0.9, 1.0))
+        data_mva    = hist.Hist(hist.axis.Regular(12, -0.9, 1.0))
+    else:
+        mc_mva      = hist.Hist(hist.axis.Regular(8, -0.9, 1.0))
+        nl_mva      = hist.Hist(hist.axis.Regular(8, -0.9, 1.0))
+        data_mva    = hist.Hist(hist.axis.Regular(8, -0.9, 1.0))
+
+    mc_mva.fill( mc_mvaID,     weight = mc_weights )
+    nl_mva.fill( nl_mvaID,     weight = mc_weights )
+    data_mva.fill( data_mvaID, weight = data_weights  )
+
+    if( zmmg ):
+        plott( data_mva , mc_mva, nl_mva , plot_path + '/mvaID_barrel.png', xlabel = "mvaID" , zmmg = True, postEE=postEE )
+    else:
+        plott( data_mva , mc_mva, nl_mva , plot_path + '/mvaID_barrel_test.png', xlabel = "mvaID", postEE = postEE  )
+
+
+def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights, plot_path, postEE = True):
+    
+    model_path = '/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/run3_mvaID_models/'
 
     photonid_mva = xgboost.Booster()
     photonid_mva.load_model( model_path + "model_endcap.json" )
@@ -478,241 +512,143 @@ def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data
     nl_mvaID   = 1 - (2/(1+np.exp( 2*nl_mvaID )))
     mc_mvaID   = 1 - (2/(1+np.exp( 2*mc_mvaID )))
 
-    plot_profile_endcap( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
+    #plot_profile_endcap( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
 
     # now, we create and fill the histograms with the mvaID distributions
-    mc_mva      = hist.Hist(hist.axis.Regular(30, -0.9, 1.0))
-    nl_mva      = hist.Hist(hist.axis.Regular(30, -0.9, 1.0))
-    data_mva    = hist.Hist(hist.axis.Regular(30, -0.9, 1.0))
+    mc_mva      = hist.Hist(hist.axis.Regular(6, -0.9, 1.0))
+    nl_mva      = hist.Hist(hist.axis.Regular(6, -0.9, 1.0))
+    data_mva    = hist.Hist(hist.axis.Regular(6, -0.9, 1.0))
 
-    mc_mva.fill( mc_mvaID, weight     = (1e6)*mc_weights )
-    nl_mva.fill( nl_mvaID, weight     = (1e6)*mc_weights )
-    data_mva.fill( data_mvaID, weight = (1e6)*data_weights  )
+    mc_mva.fill( mc_mvaID, weight     = mc_weights )
+    nl_mva.fill( nl_mvaID, weight     = mc_weights )
+    data_mva.fill( data_mvaID, weight = data_weights)
 
-    plott( data_mva , mc_mva, nl_mva , plot_path + '/mvaID_endcap.png', xlabel = "End cap mvaID"  )
+    plott( data_mva , mc_mva, nl_mva , plot_path + '/mvaID_endcap.png', xlabel = "mvaID", postEE=postEE )
 
-def plot_distributions_after_transformations(
-    var_list,
-    training_inputs,
-    conditions_list,
-    training_conditions,
-    training_weights,
-    output_path='plot/validation_plots/after_transformation/'
-):
-    """
-    Plots distributions of variables and conditions after transformations.
+def plot_distributions_after_transformations(training_inputs, training_conditions, training_weights):
 
-    Parameters:
-    - var_list (list of str): List of variable names corresponding to training_inputs columns.
-    - training_inputs (numpy.ndarray or torch.Tensor): Array of input variables (samples x features).
-    - conditions_list (list of str): List of condition names corresponding to training_conditions columns.
-    - training_conditions (numpy.ndarray or torch.Tensor): Array of condition variables (samples x conditions).
-    - training_weights (numpy.ndarray or torch.Tensor): Array of training weights for each sample.
-    - output_path (str, optional): Directory where plots will be saved.
-      Defaults to 'plot/validation_plots/after_transformation/'.
-    """
+    # two masks to separate events betwenn mc and data
+    data_mask = training_conditions[:,-1] == 1
+    mc_mask   = training_conditions[:,-1] == 0
 
-    # Ensure the output directory exists
-    os.makedirs(output_path, exist_ok=True)
+    # now we plot the distributions
+    for i in range( np.shape( training_inputs[data_mask] )[1] ):
 
-    # lets remove energy raw from here if it exists!
-    #var_list = [entry for entry in var_list if "probe_energyRaw" not in entry.lower() and "probe_energyRaw" not in entry.lower()]
-    var_list = var_list[1:] # hotfix to elimnate energyRaw from the inputs
+                mean = np.mean( np.array(training_inputs[data_mask][:,i]) )
+                std  = np.std(  np.array(training_inputs[data_mask][:,i]) )
 
 
-    # Convert inputs to NumPy arrays if they are PyTorch tensors
-    if isinstance(training_inputs, torch.Tensor):
-        training_inputs = training_inputs.cpu().numpy()
-    if isinstance(training_conditions, torch.Tensor):
-        training_conditions = training_conditions.cpu().numpy()
-    if isinstance(training_weights, torch.Tensor):
-        training_weights = training_weights.cpu().numpy()
+                data_hist            = hist.Hist(hist.axis.Regular(70, mean - 3.0*std, mean + 3.0*std))
+                mc_hist              = hist.Hist(hist.axis.Regular(70, mean - 3.0*std, mean + 3.0*std))
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(70, mean - 3.0*std, mean + 3.0*std))
 
-    # Masks to separate events between data and MC based on the last column of training_conditions
-    data_mask = training_conditions[:, -1] == 1
-    mc_mask = training_conditions[:, -1] == 0
+                data_hist.fill( np.array(training_inputs[data_mask][:,i]   )  )
+                mc_hist.fill(  np.array( training_inputs[mc_mask][:,i]),  weight = 1e6*training_weights[mc_mask] )
+                #mc_rw_hist.fill( np.array( flow_samples[:,i]) , weight = 1e6*mc_weights )
 
-    # Ensure that masks are boolean NumPy arrays
-    data_mask = data_mask.astype(bool)
-    mc_mask = mc_mask.astype(bool)
+                plott( data_hist , mc_hist, mc_hist , 'plots/validation_plots/transformation/after_transform_' +  str(var_list[i]) +".png", xlabel = str(var_list[i])  )
 
-    # Plot distributions for input variables
-    num_variables = training_inputs.shape[1]
-    for i in range(num_variables):
-        variable_name = var_list[i]
 
-        # Extract data for the variable
-        data_values = training_inputs[data_mask, i]
-        mc_values = training_inputs[mc_mask, i]
-        mc_weights = training_weights[mc_mask]
+# Down here are some ploting functions I still need to implement!
+def plot_correlation_matrix_diference_barrel(data, data_conditions,data_weights,mc , mc_conditions,mc_weights,mc_corrected,path):
 
-        # Compute mean and standard deviation for data histogram binning
-        mean = np.mean(data_values)
-        std = np.std(data_values)
+    # lets do this for barrel only for now ...
+    mask_mc,mask_data = np.abs(mc_conditions[:,1]) < 2.4222, np.abs(data_conditions[:,1]) < 2.44222
 
-        # Create histograms with appropriate binning
-        #bins = hist.axis.Regular(70, mean - 3.0 * std, mean + 3.0 * std)
-        bins = hist.axis.Regular(70, -5.0, 5.0)
-        bins = hist.axis.Regular(70, np.min(data_values) , np.max(data_values))
-        data_hist = hist.Hist(bins)
-        mc_hist = hist.Hist(bins)
+    # apply the barrel only condition
+    data, mc, mc_corrected              = data[mask_data]            , mc[mask_mc]             ,mc_corrected[mask_mc]
+    data_conditions,mc_conditions      = data_conditions[mask_data] , mc_conditions[mask_mc]
+    data_weights,mc_weights            = data_weights[mask_data]    , mc_weights[mask_mc]
 
-        # Fill histograms
-        data_hist.fill(data_values)
-        mc_hist.fill(mc_values, weight=mc_weights)
+    energy_err_data = data[:,-1:]
+    energy_err_mc = mc[:,-1:]
+    energy_err_mc_corrected = mc_corrected[:,-1:]
 
-        # Plot and save histograms
-        output_file = os.path.join(output_path, f'after_transform_{variable_name}.png')
-        plott(data_hist, mc_hist, mc_hist, output_file, xlabel=variable_name)
+    mc           = mc[:,1: int( data.size()[1]  - 0 ) ]
+    mc_corrected = mc_corrected[:,1: int( data.size()[1]  - 0 ) ]
+    data         = data[:,1: int( data.size()[1]  - 0 ) ]
 
-    # Plot distributions for condition variables
-    num_conditions = training_conditions.shape[1] - 1
-    for i in range(num_conditions):
-        condition_name = conditions_list[i]
+    # Lets only use the mvaID inputs in the correlation matrix!
+    #data = torch.cat( [  data, energy_err_data .view(-1,1)  ], axis = 1 )
+    #mc = torch.cat( [  mc, energy_err_mc .view(-1,1)  ], axis = 1 )
+    #mc_corrected = torch.cat( [  mc_corrected, energy_err_mc_corrected .view(-1,1)  ], axis = 1 )
 
-        # Extract data for the condition
-        data_values = training_conditions[data_mask, i]
-        mc_values = training_conditions[mc_mask, i]
-        mc_weights = training_weights[mc_mask]
+    # Some weights can of course be negative, so I had to use the abs here, since it does not accept negative weights ...
+    data_corr         = torch.cov( data.T         , aweights = torch.Tensor( abs(data_weights) ))
+    mc_corr           = torch.cov( mc.T           , aweights = torch.Tensor( abs(mc_weights)   ))
+    mc_corrected_corr = torch.cov( mc_corrected.T , aweights = torch.Tensor( abs(mc_weights)   ))
 
-        # Compute mean and standard deviation for data histogram binning
-        mean = np.mean(data_values)
-        std = np.std(data_values)
+    #from covariance to correlation matrices
+    data_corr         = torch.inverse( torch.sqrt( torch.diag_embed( torch.diag(data_corr))) ) @ data_corr @  torch.inverse( torch.sqrt(torch.diag_embed(torch.diag(data_corr))) ) 
+    mc_corr           = torch.inverse( torch.sqrt( torch.diag_embed(torch.diag(mc_corr)) )) @ mc_corr @  torch.inverse( torch.sqrt(torch.diag_embed(torch.diag(mc_corr))) ) 
+    mc_corrected_corr = torch.inverse( torch.diag_embed(torch.sqrt(torch.diag(mc_corrected_corr)) )) @ mc_corrected_corr @  torch.inverse( torch.sqrt(torch.diag_embed(torch.diag(mc_corrected_corr))) ) 
+    # end of matrix evaluations, now the plotting part!
 
-        # Create histograms with appropriate binning
-        bins = hist.axis.Regular(70, mean - 3.0 * std, mean + 3.0 * std)
-        data_hist = hist.Hist(bins)
-        mc_hist = hist.Hist(bins)
 
-        # Fill histograms
-        data_hist.fill(data_values)
-        mc_hist.fill(mc_values, weight=mc_weights)
-
-        # Plot and save histograms
-        output_file = os.path.join(output_path, f'after_transform_{condition_name}.png')
-        plott(data_hist, mc_hist, mc_hist, output_file, xlabel=condition_name)
-
-# Converting covariance to correlation matrices
-def cov_to_corr(cov_matrix):
-    stddev = torch.sqrt(torch.diag(cov_matrix))
-    stddev_matrix = torch.diag_embed(stddev)
-    corr_matrix = torch.inverse(stddev_matrix) @ cov_matrix @ torch.inverse(stddev_matrix)
-    return corr_matrix
-
-def plot_correlation_matrix_diference_barrel(
-    var_list_barrel_only, 
-    match_indices_barrel,
-    data, 
-    data_conditions,
-    data_weights,
-    mc, 
-    mc_conditions,
-    mc_weights,
-    mc_corrected,
-    path
-):
-
-    # Remove 'probe_' prefix from variable names
-    var_list_barrel_only = [var.replace('probe_', '').replace('Cone', '').replace('trk', '').replace('Pt', '').replace('Charged', '').replace('Cluster', '') for var in var_list_barrel_only]
-
-    # Apply barrel-only condition (|eta| < 1.4222)
-    barrel_eta_cut = 1.4222
-    mask_data = np.abs(data_conditions[:, 1]) < barrel_eta_cut
-    mask_mc = np.abs(mc_conditions[:, 1]) < barrel_eta_cut
-
-    # Apply the barrel condition to the data
-    data = data[mask_data]
-    data_weights = data_weights[mask_data]
-
-    # Apply the barrel condition to the MC samples
-    mc = mc[mask_mc]
-    mc_weights = mc_weights[mask_mc]
-    mc_corrected = mc_corrected[mask_mc]
-
-    # Select only the variables related to barrel variables
-    data = data[:, match_indices_barrel]
-    mc = mc[:, match_indices_barrel]
-    mc_corrected = mc_corrected[:, match_indices_barrel]
-
-    # Handle negative weights by taking absolute values
-    data_weights_abs = np.abs(data_weights)
-    mc_weights_abs   = np.abs(mc_weights)
-
-    #calculating the covariance matrix of the pytorch tensors
-    """ 
-    data_cov         = torch.cov( data.T  )
-    mc_cov           = torch.cov( mc.T           , aweights = torch.Tensor(abs(mc_weights_abs)))
-    mc_corrected_cov = torch.cov( mc_corrected.T , aweights = torch.Tensor(abs(mc_weights_abs)))
-
-    data_corr         = cov_to_corr(data_cov)
-    mc_corr           = cov_to_corr(mc_cov)
-    mc_corrected_corr = cov_to_corr(mc_corrected_cov)
-    """ 
-
+    fig, ax = plt.subplots(figsize=(64,64))
+    ax.matshow( 100*( data_corr - mc_corr ), cmap = 'bwr', vmin=-35, vmax=35)   
     
-    # Function to compute weighted covariance matrix
-    def weighted_covariance(X, weights):
-        average = np.average(X, axis=0, weights=weights)
-        X_centered = X - average
-        cov = np.cov(X_centered, rowvar=False, aweights=weights)
-        return cov
+    #ploting the cov matrix values
+    mean,count = 0,0
+    for (i, j), z in np.ndenumerate(100*( data_corr - mc_corr )):
+        mean = mean + abs(z)
+        count = count + 1
+        if( abs(z) < 1  ):
+            pass
+        else:
+            ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 85)  
+    mean = mean/count   
 
-    # Compute weighted covariance matrices
-    data_cov = weighted_covariance(data, data_weights_abs)
-    mc_cov = weighted_covariance(mc, mc_weights_abs)
-    mc_corrected_cov = weighted_covariance(mc_corrected, mc_weights_abs)
+    ax.set_xticks(np.arange(len(var_list_matrix_barrel)-1))
+    ax.set_yticks(np.arange(len(var_list_matrix_barrel)-1))
+    
+    ax.set_xticklabels(var_list_matrix_barrel[1:],fontsize = 85,rotation=90)
+    ax.set_yticklabels(var_list_matrix_barrel[1:],fontsize = 85,rotation=0)
 
-    # Convert covariance matrices to correlation matrices
-    def covariance_to_correlation(cov):
-        diag = np.sqrt(np.diag(cov))
-        outer_diag = np.outer(diag, diag)
-        corr = cov / outer_diag
-        corr[cov == 0] = 0
-        return corr
+    ax.set_xlabel(r' $(MC - data)$ - Metric: ' + str(mean), loc = 'center' ,fontsize = 120)
 
-    data_corr = covariance_to_correlation(data_cov)
-    mc_corr = covariance_to_correlation(mc_cov)
-    mc_corrected_corr = covariance_to_correlation(mc_corrected_cov)
+    plt.savefig(path + '/correlation_matrix_barrel.pdf')
 
-    # Helper function to plot difference matrices
-    def plot_difference_matrix(diff_matrix, variable_names, xlabel, output_filename):
-        fig, ax = plt.subplots(figsize=(20, 20))
-        cax = ax.matshow(100 * diff_matrix, cmap='bwr', vmin=-5, vmax=5)
-        fig.colorbar(cax)
+    #plloting part
+    fig, ax = plt.subplots(figsize=(64,64))
+    ax.matshow( 100*( data_corr - mc_corrected_corr ), cmap = 'bwr', vmin=-35, vmax=35)
 
-        mean_diff = np.mean(np.abs(diff_matrix)) * 100
+    #ploting the cov matrix values
+    mean,count = 0,0
+    for (i, j), z in np.ndenumerate( 100*( data_corr - mc_corrected_corr )):
+        if( abs(z) < 1.15  ):
+            pass 
+        elif(abs(z) > 5):
+            if( z > 0 ):
+                z = z-5
+                ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 85)  
+            else:
+                z = z+3.0
+                ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 85)  
+        else:
+            ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 85)    
+    
+        mean = mean + abs(z)
+        count = count + 1
 
-        for (i, j), z in np.ndenumerate(100 * diff_matrix):
-            if abs(z) >= 1:
-                ax.text(j, i, f'{z:.1f}', ha='center', va='center', fontsize=20)
+    mean = mean/count
+    ax.set_xlabel(r'($MC^{Corrected}$-data)  - Metric: ' + str(mean), loc = 'center' ,fontsize = 120)
+    #plt.tight_layout()
+    plt.title( mean )
+    
+    #var_list_matrix_barrel=var_list_matrix_barrel.replace('probe_', '')
 
-        ax.set_xticks(np.arange(len(variable_names)))
-        ax.set_yticks(np.arange(len(variable_names)))
-        ax.set_xticklabels(variable_names, fontsize=25, rotation=90)
-        ax.set_yticklabels(variable_names, fontsize=25)
-        ax.set_xlabel(f'{xlabel} - Metric: {mean_diff:.2f}', loc = 'center', fontsize=30)
+    ax.set_xticks(np.arange(len(var_list_matrix_barrel)-1))
+    ax.set_yticks(np.arange(len(var_list_matrix_barrel)-1))
+    
+    ax.set_xticklabels(var_list_matrix_barrel[1:],fontsize = 85 ,rotation=90)
+    ax.set_yticklabels(var_list_matrix_barrel[1:],fontsize = 85 ,rotation=0)
 
-        plt.tight_layout()
-        plt.savefig(output_filename)
-        plt.close()
+    plt.savefig(path + '/correlation_matrix_corrected_barrel.pdf')
+    plt.close()
 
-    # Plotting difference between data and corrected MC correlation matrices
-    diff_corr_corrected = data_corr - mc_corrected_corr
-    plot_difference_matrix(
-        diff_matrix=diff_corr_corrected,
-        variable_names=var_list_barrel_only,
-        xlabel='(Corr_MC_Corrected - Corr_Data)',
-        output_filename=f'{path}/correlation_matrix_corrected_barrel.png'
-    )
 
-    # Plotting difference between data and uncorrected MC correlation matrices
-    diff_corr = data_corr - mc_corr
-    plot_difference_matrix(
-        diff_matrix=diff_corr,
-        variable_names=var_list_barrel_only,
-        xlabel='(Corr_MC - Corr_Data)',
-        output_filename=f'{path}/correlation_matrix_barrel.png'
-    )
+
 
 def plot_correlation_matrix_diference_endcap(data, data_conditions,data_weights,mc , mc_conditions,mc_weights,mc_corrected,path):
 
@@ -724,11 +660,6 @@ def plot_correlation_matrix_diference_endcap(data, data_conditions,data_weights,
     data_conditions,mc_conditions      = data_conditions[mask_data] , mc_conditions[mask_mc]
     data_weights,mc_weights            = data_weights[mask_data]    , mc_weights[mask_mc]
     
-    # removing energy Raw from here!
-    data          = data[:,1:]
-    mc            = mc[:,1:]
-    mc_corrected  = mc_corrected[:,1:]   
-
     # Some weights can of course be negative, so I had to use the abs here, since it does not accept negative weights ...
     data_corr         = torch.cov( data.T         , aweights = torch.Tensor( abs(data_weights) ))
     mc_corr           = torch.cov( mc.T           , aweights = torch.Tensor( abs(mc_weights)   ))
@@ -758,12 +689,16 @@ def plot_correlation_matrix_diference_endcap(data, data_conditions,data_weights,
     ax.set_xlabel(r'(Corr_MC$^{Corrected}$-Corr_data)  - Metric: ' + str(mean), loc = 'center' ,fontsize = 70)
     #plt.tight_layout()
     plt.title( mean )
+
+    #adding axis labels
+    #ax.set_xticklabels(['']+var_names)
+    #ax.set_yticklabels(['']+var_names)
     
-    ax.set_xticks(np.arange(len(var_list)-1))
-    ax.set_yticks(np.arange(len(var_list)-1))
+    ax.set_xticks(np.arange(len(var_list)))
+    ax.set_yticks(np.arange(len(var_list)))
     
-    ax.set_xticklabels(var_list[1:],fontsize = 45 ,rotation=90)
-    ax.set_yticklabels(var_list[1:],fontsize = 45 ,rotation=0)
+    ax.set_xticklabels(var_list,fontsize = 45 ,rotation=90)
+    ax.set_yticklabels(var_list,fontsize = 45 ,rotation=0)
 
 
     plt.savefig(path + '/correlation_matrix_corrected_endcap.png')
@@ -787,11 +722,11 @@ def plot_correlation_matrix_diference_endcap(data, data_conditions,data_weights,
             ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center', fontsize = 60)  
     mean = mean/count   
 
-    ax.set_xticks(np.arange(len(var_list)-1))
-    ax.set_yticks(np.arange(len(var_list)-1))
+    ax.set_xticks(np.arange(len(var_list)))
+    ax.set_yticks(np.arange(len(var_list)))
     
-    ax.set_xticklabels(var_list[1:],fontsize = 45,rotation=90)
-    ax.set_yticklabels(var_list[1:],fontsize = 45,rotation=0)
+    ax.set_xticklabels(var_list,fontsize = 45,rotation=90)
+    ax.set_yticklabels(var_list,fontsize = 45,rotation=0)
 
     ax.set_xlabel(r'(Corr_MC-Corr_data  - Metric: ' + str(mean), loc = 'center' ,fontsize = 70)
 
@@ -799,7 +734,7 @@ def plot_correlation_matrix_diference_endcap(data, data_conditions,data_weights,
 
 
 #The events are binned in bins of equal number of events of each profilling variable, than the median is calculated!
-def plot_profile_barrel( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data_conditions, mc_weights, data_weights,path):
+def plot_profile_barrel( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data_conditions, mc_weights, data_weights,path, zmmg = False):
 
     # Barrel only mask!
     mask_mc   = np.abs( mc_conditions[:,1])   < 1.442
@@ -815,10 +750,10 @@ def plot_profile_barrel( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data
     data_weights    = data_weights[mask_data]
 
     #lets call the function ...
-    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,0],data_mva_id,data_conditions[:,0],mc_weights,data_weights , path, var = 'pt' )
-    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,1],data_mva_id,data_conditions[:,1],mc_weights,data_weights , path, var = 'eta' )
-    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,2],data_mva_id,data_conditions[:,2],mc_weights,data_weights , path ,var = 'phi' )
-    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,3],data_mva_id,data_conditions[:,3],mc_weights,data_weights , path ,var = 'rho' )
+    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,0],data_mva_id,data_conditions[:,0],mc_weights,data_weights , path, zmmg, var = 'pt'  )
+    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,1],data_mva_id,data_conditions[:,1],mc_weights,data_weights , path, zmmg, var = 'eta' )
+    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,2],data_mva_id,data_conditions[:,2],mc_weights,data_weights , path, zmmg, var = 'phi' )
+    plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,mc_conditions[:,3],data_mva_id,data_conditions[:,3],mc_weights,data_weights , path, zmmg, var = 'rho' )
 
 
 
@@ -847,16 +782,32 @@ def plot_profile_endcap( nl_mva_ID, mc_mva_id ,mc_conditions,  data_mva_id, data
 
 
 # Lets do this separatly, first, we do the plots at the barrel only!
-def plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,var_mc,data_mva_id,var_data,mc_weights,data_weights,path,var = 'pt' ):
+def plot_mvaID_profile_barrel( nl_mva_ID,mc_mva_id,var_mc,data_mva_id,var_data,mc_weights,data_weights,path, zmmg,  var = 'pt' ):
     
-    if 'pt' in var:
-        bins = np.linspace( 25.0, 65.0, 14 )
-    elif 'phi' in var:
-        bins = np.linspace( -3.1415, 3.1415, 14)
-    elif 'eta' in var:
-        bins = np.linspace( -1.442, 1.442, 14 )
-    elif 'rho' in var:
-        bins = np.linspace( 10.0, 45.0, 14 )
+    nl_mva_ID    = np.array(nl_mva_ID)
+    mc_mva_id    = np.array(mc_mva_id)
+    data_mva_id  = np.array(data_mva_id)
+    mc_weights   = np.array(mc_weights)
+    data_weights = np.array(data_weights)
+
+    if( zmmg ):
+        if 'pt' in var:
+            bins = np.linspace( 20.0, 40.0, 6 )
+        elif 'phi' in var:
+            bins = np.linspace( -3.1415, 3.1415, 6)
+        elif 'eta' in var:
+            bins = np.linspace( -1.442, 1.442, 6 )
+        elif 'rho' in var:
+            bins = np.linspace( 10.0, 45.0, 6 )       
+    else:
+        if 'pt' in var:
+            bins = np.linspace( 25.0, 60.0, 13 )
+        elif 'phi' in var:
+            bins = np.linspace( -3.1415, 3.1415, 13)
+        elif 'eta' in var:
+            bins = np.linspace( -1.442, 1.442, 13 )
+        elif 'rho' in var:
+            bins = np.linspace( 10.0, 45.0, 13 )
 
     #arrays to store the 
     position, nl_mean, data_mean, mc_mean = [],[],[],[]
@@ -936,12 +887,14 @@ def plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,var_mc,data_mva_id,var_data,m
     elif 'phi' in var:
         bins = np.linspace( -3.1415, 3.1415, 20)
     elif 'eta' in var:
+        print('ue')
         bins = np.linspace( [[-2.5,-1.442],  [1.442, 2.5] ], 20 )
+        print(bins)
     elif 'rho' in var:
         bins = np.linspace( 5.0, 50.0, 20 )
 
     #arrays to store the 
-    position, nl_mean, data_mean, mc_mean   = [],[],[],[]
+    position, nl_mean, data_mean, mc_mean = [],[],[],[]
     nl_mean_q25, data_mean_q25, mc_mean_q25 = [],[],[]
     nl_mean_q75, data_mean_q75, mc_mean_q75 = [],[],[]
 
@@ -1010,38 +963,52 @@ def plot_mvaID_profile_endcap( nl_mva_ID,mc_mva_id,var_mc,data_mva_id,var_data,m
 
     plt.close()
 
-# This is a plot distribution suitable for dataframes, if one wants to plot tensors see "plot_distributions_for_tensors()"
-def plot_distributions__( path, data_df, mc_df, data_weights, mc_weights, variables_to_plot, weights_befores_rw = False ):
+def tackle_mva_ID(data_df,mc_df,var_list, corr_mva_list, mc_weights, plot_path):
+    
+    model_path = '/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/run3_mvaID_models/'
 
-    for set in variables_to_plot:
+    photonid_mva = xgboost.Booster()
+    photonid_mva.load_model( model_path + "model.json" )
 
-        for key in set:
+    data_df = data_df[np.abs(  np.array(data_df[ "probe_ScEta" ])) < 1.5]
+    mask_abrrel = [np.abs(  np.array(mc_df[ "probe_ScEta" ])) < 1.5]
+    mc_df   = mc_df[np.abs(  np.array(mc_df[ "probe_ScEta" ])) < 1.5]
+    #nf_df   = nf_df[np.abs(  np.array(nf_df[ "probe_ScEta" ])) < 1.5]
 
-            mean = np.mean( np.nan_to_num(np.array(data_df[key.replace('_raw','')])) )
-            std  = np.std(  np.nan_to_num(np.array(data_df[key.replace('_raw','')])) )
+    # mva_id for data,mc and simulation
+    data_mvaID = plot_higgsdna_like_mva_ID( data_df  , data_df["fixedGridRhoAll"] , var_list , photonid_mva )
+    mc_mvaID   = plot_higgsdna_like_mva_ID( mc_df    , mc_df["fixedGridRhoAll"]   , var_list , photonid_mva )
+    nf_mvaID   = plot_higgsdna_like_mva_ID( mc_df    , mc_df["fixedGridRhoAll"]   , corr_mva_list , photonid_mva )    
+    
 
-            if( 'Iso' in key or 'DR' in key   ):
-                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
-                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
-            elif( 'hoe' in  key ):
-                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
-                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
-            else:
-                data_hist            = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
-                mc_hist              = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
+    mc_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
+    nl_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
+    data_mva    = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
 
-            data_hist.fill( np.array(data_df[key.replace('_raw','')]   ) , weight = data_weights )
-            
-            if( len(weights_befores_rw)  ):
-                mc_hist.fill( np.array(  mc_df[key]), weight = weights_befores_rw )
-            else:
-                mc_hist.fill( np.array(  mc_df[key]) )
+    print( mc_weights )
+    print( mask_abrrel )
 
-            #print( np.shape( np.array(drell_yan_df[key]) ) , np.shape( mc_weights  ) )
+    mc_mva.fill( mc_mvaID, weight = (1e6)*mc_weights[mask_abrrel] )
+    nl_mva.fill( nf_mvaID, weight = (1e6)*mc_weights[mask_abrrel] )
+    data_mva.fill( data_mvaID )
 
-            mc_rw_hist.fill( np.array(mc_df[key]) , weight = mc_weights )
 
-            plott( data_hist , mc_hist, mc_rw_hist , path +  str(key) +".png", xlabel = str(key)  )
+    plott( data_mva , mc_mva, nl_mva , plot_path + '/mvaID_barrel_2.png', xlabel = "Barrel mvaID"  )
+
+    return 0
+
+def plot_higgsdna_like_mva_ID(photon, rho, var_order, photonid_mva):
+    
+    bdt_inputs = {}
+    bdt_inputs = np.column_stack(
+        [np.array(photon[name]) for name in var_order]
+    )
+
+    tempmatrix = xgboost.DMatrix(bdt_inputs)
+
+    mvaID = photonid_mva.predict(tempmatrix)
+
+    # Only needed to compare to TMVA
+    mvaID = 1.0 - 2.0 / (1.0 + np.exp(2.0 * mvaID))
+
+    return mvaID
