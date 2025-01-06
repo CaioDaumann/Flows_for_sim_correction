@@ -221,9 +221,9 @@ class Simulation_correction():
             match_indices_barrel = [index for index, item in enumerate(self.variables_list) if item in self.var_list_barrel_only]
             
             # Plotting the correlation matrices to better understand how the flows treats the correlations
-            plot_utils.plot_correlation_matrix_diference_barrel(self.var_list_barrel_only , match_indices_barrel , self.data_test_inputs.clone().detach().cpu(), self.data_test_conditions.clone().detach().cpu(), self.data_test_weights.clone().detach().cpu(),  self.mc_test_inputs.clone().detach().cpu(), self.mc_test_conditions.clone().detach().cpu(), self.mc_test_weights.clone().detach().cpu() , self.samples.clone().detach().cpu(),  self.dump_folder)
-            plot_utils.plot_correlation_matrix_diference_endcap(self.data_test_inputs.clone().detach().cpu(), self.data_test_conditions.clone().detach().cpu(), self.data_test_weights.clone().detach().cpu(),  self.mc_test_inputs.clone().detach().cpu(), self.mc_test_conditions.clone().detach().cpu(), self.mc_test_weights.clone().detach().cpu() , self.samples.clone().detach().cpu(),  self.dump_folder)
-
+            #plot_utils.plot_correlation_matrix_diference_barrel(self.var_list_barrel_only , match_indices_barrel , self.data_test_inputs.clone().detach().cpu(), self.data_test_conditions.clone().detach().cpu(), self.data_test_weights.clone().detach().cpu(),  self.mc_test_inputs.clone().detach().cpu(), self.mc_test_conditions.clone().detach().cpu(), self.mc_test_weights.clone().detach().cpu() , self.samples.clone().detach().cpu(),  self.dump_folder)
+            #plot_utils.plot_correlation_matrix_diference_endcap(self.data_test_inputs.clone().detach().cpu(), self.data_test_conditions.clone().detach().cpu(), self.data_test_weights.clone().detach().cpu(),  self.mc_test_inputs.clone().detach().cpu(), self.mc_test_conditions.clone().detach().cpu(), self.mc_test_weights.clone().detach().cpu() , self.samples.clone().detach().cpu(),  self.dump_folder)  
+            
             # Now we evaluate the run3 mvaID and check how well the distributions agree
             #(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights,path_plot)
             plot_utils.plot_mvaID_curve(np.array(self.mc_test_inputs),np.array(self.data_test_inputs),np.array(self.samples),np.array(self.mc_test_conditions.to('cpu')), np.array(self.data_test_conditions.to('cpu')),  np.array(self.mc_test_weights.to('cpu')), np.array(self.data_test_weights), self.dump_folder)
@@ -392,7 +392,7 @@ class Simulation_correction():
     def read_saved_tensor(self):
 
         # this is defined in the read_data.py ...
-        path_to_save_tensors = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/data_reading/saved_tensors/zee_tensors/"
+        path_to_save_tensors = "./saved_tensors/zee_tensors/"
 
         # reading the training tesnors
         self.data_training_inputs      = torch.load( path_to_save_tensors + 'data_training_inputs.pt' )
@@ -445,6 +445,13 @@ class Make_iso_continuous:
         # Placeholder for min and max values after log transform (used in inverse scaling)
         self.tensor_min = None
         self.tensor_max = None
+
+        if tensor.min() < 0:
+            ### why we have negative values here????
+            tensor[ tensor < 0 ] = 0.0
+            #print( tensor[:20] )
+            #raise ValueError("Input tensor contains negative")
+            #exit()
 
     def shift_and_sample(self, tensor):
   

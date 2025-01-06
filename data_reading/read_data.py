@@ -10,7 +10,6 @@ import pandas as pd
 
 # importing other scripts
 import plot.plot_utils        as plot_utils
-import data_reading.zmmg_utils as zmmg_utils
 
 
 def calculate_bins_position(array, num_bins=12):
@@ -43,9 +42,9 @@ def perform_reweighting(simulation_df, data_df):
     data_weights = data_weights/np.sum( data_weights )
 
     # Defining the reweigthing binning! - Bins were chossen such as each bin has ~ the same number of events
-    pt_bins  = calculate_bins_position(np.array(simulation_df["probe_pt"]), 30)
-    eta_bins = calculate_bins_position(np.array(simulation_df["probe_ScEta"]), 30)
-    rho_bins = calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 30) #np.linspace( 5,65, 30) #calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 70)
+    pt_bins  = calculate_bins_position(np.array(simulation_df["probe_pt"]), 10)
+    eta_bins = calculate_bins_position(np.array(simulation_df["probe_ScEta"]), 10)
+    rho_bins = calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 10) #np.linspace( 5,65, 30) #calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 70)
 
     bins = [ pt_bins , eta_bins, rho_bins ]
 
@@ -105,7 +104,7 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
 
     input_vars_data = input_vars
     for i in range( len(input_vars) ):
-        input_vars_data[i] = input_vars_data[i].replace('_raw','')
+        input_vars_data[i] = input_vars_data[i].replace('_raw','').replace('_uncorr','')
 
     # creating the inputs and conditions tensors! - adding the bollean to the conditions tensors
     data_inputs     = torch.tensor(np.nan_to_num(np.array(data_df[input_vars_data])))
@@ -179,7 +178,7 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
     mc_test_weights    = mc_weights[int( validation_percent*len(mc_inputs  )):] 
 
     # now, all the tensors are saved so they can be read by the training class
-    path_to_save_tensors = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/data_reading/saved_tensors/zee_tensors/"
+    path_to_save_tensors = "./saved_tensors/zee_tensors/"
 
     torch.save( data_training_inputs       , path_to_save_tensors + 'data_training_inputs.pt' )
     torch.save( data_training_conditions   , path_to_save_tensors + 'data_training_conditions.pt')
@@ -230,7 +229,20 @@ def read_zee_data(var_list, conditions_list, data_samples_path, mc_samples_path,
 
     # Concatenate all files_df into a single DataFrame after the loop
     drell_yan_df = pd.concat(files_mc, ignore_index=True)
-        
+    
+    #for key in drell_yan_df.keys():
+    #    print( key )
+    #exit()
+    
+    #print(  )
+    #print( drell_yan_df["probe_uncorr_r9"].values - drell_yan_df["probe_r9"].values  )
+    #print( drell_yan_df["probe_uncorr_s4"].values - drell_yan_df["probe_s4"].values  )
+    #exit()
+    
+    #drell_yan_df = drell_yan_df[:200000]
+    #data_df      = data_df[:200000]
+    
+    
     # Now that the data is read, we need to perform a loose selection with the objective of decrease teh background contamination
     data_df = perform_zee_selection(data_df)
     drell_yan_df = perform_zee_selection(drell_yan_df)
@@ -252,6 +264,14 @@ def read_zee_data(var_list, conditions_list, data_samples_path, mc_samples_path,
     # Making the weigths into numpy arrays
     mc_weights        = drell_yan_df["weight"].values
     data_weights      = data_df["weight"].values
+    
+    ### for validation only
+    #drell_yan_df = drell_yan_df[:200000]
+    #data_df      = data_df[:200000]
+    #data_weights = data_weights[:200000]
+    #mc_weights   = mc_weights[:200000]
+    #mc_weights_before = mc_weights_before[:200000]
+    
     
     assert np.sum(mc_weights ) - np.sum(data_weights) <= 1
     

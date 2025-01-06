@@ -11,39 +11,36 @@ import xgboost
 import os
 
 # Names of the used variables, I copied it here only so it is easier to use it acess the labels and names of teh distirbutions
-var_list = ["probe_energyRaw",
-                "probe_raw_r9", 
-                "probe_raw_sieie",
-                "probe_raw_etaWidth",
-                "probe_raw_phiWidth",
-                "probe_raw_sieip",
-                "probe_raw_s4",
-                "probe_raw_hoe",
-                "probe_raw_ecalPFClusterIso",
-                "probe_raw_trkSumPtHollowConeDR03",
-                "probe_raw_trkSumPtSolidConeDR04",
-                "probe_raw_pfChargedIso",
-                "probe_raw_pfChargedIsoWorstVtx",
-                "probe_raw_esEffSigmaRR",
-                "probe_raw_esEnergyOverRawE",
-                "probe_raw_hcalPFClusterIso",
-                "probe_raw_energyErr"]
+var_list = [
+        "probe_energyRaw",
+        "probe_r9",
+        "probe_sieie",
+        "probe_etaWidth",
+        "probe_phiWidth",
+        "probe_sieip",
+        "probe_s4",
+        "pfPhoIso03",
+        "pfChargedIsoPFPV",
+        "pfChargedIsoWorstVtx",
+        "probe_esEffSigmaRR",
+        "probe_esEnergyOverRawE",
+        "probe_energyErr"
+    ]
 
 # some variables have value of zero in barrel, so we must exclude them. I created this matrix so it is easier to do that!
-var_list_matrix_barrel = ["probe_energyRaw",
-            "probe_r9", 
-            "probe_sieie",
-            "probe_etaWidth",
-            "probe_phiWidth",
-            "probe_sieip",
-            "probe_s4",
-            "probe_hoe",
-            "probe_ecalPFClusterIso",
-            "probe_trkSumPtHollowConeDR03",
-            "probe_trkSumPtSolidConeDR04",
-            "probe_pfChargedIso",
-            "probe_pfChargedIsoWorstVtx",
-            "probe_energyErr"]
+var_list_matrix_barrel = [
+        "probe_energyRaw",
+        "probe_r9",
+        "probe_sieie",
+        "probe_etaWidth",
+        "probe_phiWidth",
+        "probe_sieip",
+        "probe_s4",
+        "pfPhoIso03",
+        "pfChargedIsoPFPV",
+        "pfChargedIsoWorstVtx",
+        "probe_energyErr"
+    ]
 
 
 # The next three functions are related to the plotting of the profiles of the MVA as a function of the kinematical variables
@@ -245,7 +242,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
             ax[0].text(0.05, 0.90, r'EB photons', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
             #ax[0].text(0.05, 0.95, r'|$\eta$| < 1.442', transform=ax[0].transAxes, fontsize=20, verticalalignment='top')
  
-    hep.cms.label(data=True, ax=ax[0], loc=0, label = "Preliminary", com=13.6, lumi = 27.24)
+    hep.cms.label(data=True, ax=ax[0], loc=0, label = "Preliminary", com=13.0, lumi = 44.99)
 
     # Remove the space between the subplots
     plt.subplots_adjust(hspace=0)
@@ -266,7 +263,7 @@ def plot_distributions( path, data_df, mc_df, data_weights, mc_weights, variable
     for variable_group in variables_to_plot:
         for variable in variable_group:
             # Clean the variable name by removing '_raw' if present
-            clean_variable = variable.replace('_raw', '')
+            clean_variable = variable.replace('_raw', '').replace('_uncorr','')
 
             # Extract data for the variable
             data_values = data_df[clean_variable].dropna().values
@@ -391,10 +388,10 @@ def plot_loss_cruve(training,validation, plot_path):
 
 def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights, plot_path):
     
-    model_path = './run3_mvaID_models/'
+    model_path = './run2ID_model/'
 
     photonid_mva = xgboost.Booster()
-    photonid_mva.load_model( model_path + "model.json" )
+    photonid_mva.load_model( model_path + "XGB_Model_Barrel_SA_phoID_UL2017_woCorr.json" )
 
     # The mvaID model are separted into barrel and endcap, we first evaluate the barrel here. So, we make a cut in eta
     mask_mc,mask_data = np.abs(mc_conditions[:,1]) < 1.4222, np.abs(data_conditions[:,1]) < 1.4222
@@ -408,9 +405,13 @@ def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_condit
     np.nan_to_num(nl_inputs, nan=0.0, posinf = 0.0, neginf = 0.0)
     np.nan_to_num(mc_conditions, nan=0.0, posinf = 0.0, neginf = 0.0)
 
-    data_tempmatrix = xgboost.DMatrix( np.concatenate( [data_inputs[:,:-4] , data_conditions[:,1].reshape(-1,1) , data_conditions[:,3].reshape(-1,1) ], axis =1 ) )
-    nl_tempmatrix   = xgboost.DMatrix( np.concatenate( [nl_inputs[:,:-4]   , mc_conditions[:,1].reshape(-1,1)   , mc_conditions[:,3].reshape(-1,1) ], axis =1 ) )
-    mc_tempmatrix   = xgboost.DMatrix( np.concatenate( [mc_inputs[:,:-4]   , mc_conditions[:,1] .reshape(-1,1)  , mc_conditions[:,3].reshape(-1,1) ], axis =1 ) )
+    data_tempmatrix = xgboost.DMatrix( np.concatenate( [data_inputs[:,:9] , data_conditions[:,1].reshape(-1,1) , data_conditions[:,3].reshape(-1,1) ], axis =1 ) )
+    nl_tempmatrix   = xgboost.DMatrix( np.concatenate( [nl_inputs[:,:9]   , mc_conditions[:,1].reshape(-1,1)   , mc_conditions[:,3].reshape(-1,1) ], axis =1 ) )
+    mc_tempmatrix   = xgboost.DMatrix( np.concatenate( [mc_inputs[:,:9]   , mc_conditions[:,1] .reshape(-1,1)  , mc_conditions[:,3].reshape(-1,1) ], axis =1 ) )
+
+    print( '\n\n\n\n' )
+    print( 'Shape do array input para o ID: ', np.shape( np.concatenate( [data_inputs[:,:9] , data_conditions[:,1].reshape(-1,1) , data_conditions[:,3].reshape(-1,1) ], axis =1 ) ) )
+    print( '\n\n\n\n' )
 
     #evaluating the network!
     data_mvaID = photonid_mva.predict(data_tempmatrix)
@@ -418,11 +419,9 @@ def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_condit
     mc_mvaID = photonid_mva.predict(mc_tempmatrix)
 
     # needed transformation. See more details oin HiggsDNA -> https://gitlab.cern.ch/HiggsDNA-project/HiggsDNA/-/blob/master/higgs_dna/tools/photonid_mva.py?ref_type=heads#L56
-    data_mvaID = 1 - (2/(1+np.exp( 2*data_mvaID )))
-    nl_mvaID   = 1 - (2/(1+np.exp( 2*nl_mvaID )))
-    mc_mvaID   = 1 - (2/(1+np.exp( 2*mc_mvaID )))
-
-    plot_profile_barrel( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
+    data_mvaID = -1 + 2*data_mvaID #1 - (2/(1+np.exp( 2*data_mvaID )))
+    nl_mvaID   = -1 + 2*nl_mvaID   #1 - (2/(1+np.exp( 2*nl_mvaID )))
+    mc_mvaID   = -1 + 2*mc_mvaID   #1 - (2/(1+np.exp( 2*mc_mvaID )))
 
     # now, we create and fill the histograms with the mvaID distributions
     mc_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
@@ -435,13 +434,14 @@ def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_condit
 
     plott( data_mva , mc_mva, nl_mva , plot_path + '/mvaID_barrel.png', xlabel = "Barrel mvaID"  )
 
+    #plot_profile_barrel( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
 
 def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_conditions,mc_weights, data_weights, plot_path):
     
-    model_path = './run3_mvaID_models/'
+    model_path = './run2ID_model/'
 
     photonid_mva = xgboost.Booster()
-    photonid_mva.load_model( model_path + "model_endcap.json" )
+    photonid_mva.load_model( model_path + "XGB_Model_Endcap_SA_phoID_UL2017_woCorr.json" )
 
     # The mvaID model are separted into barrel and endcap, we first evaluate the barrel here. So, we make a cut in eta
     mask_mc,mask_data = np.abs(mc_conditions[:,1]) > 1.56, np.abs(data_conditions[:,1]) > 1.56
@@ -464,9 +464,14 @@ def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data
     mc_hcalIso   = mc_inputs[:, np.shape(data_inputs)[1] -1 ]
     nl_hcalIso   = nl_inputs[:, np.shape(data_inputs)[1] -1 ]
 
-    data_tempmatrix = xgboost.DMatrix( np.concatenate( [data_inputs[:,:9], data_hcalIso.reshape(-1,1)  , data_inputs[:,9:np.shape(data_inputs)[1] -3] , data_conditions[:,1].reshape(-1,1) , data_conditions[:,3].reshape(-1,1)  , data_inputs[:, np.shape(data_inputs)[1] -3:np.shape(data_inputs)[1] -1] ], axis =1 ) )
-    nl_tempmatrix   = xgboost.DMatrix( np.concatenate( [nl_inputs[:,:9]  , nl_hcalIso.reshape(-1,1)    , nl_inputs[:,9:np.shape(data_inputs)[1] -3]   , mc_conditions[:,1].reshape(-1,1)   , mc_conditions[:,3].reshape(-1,1)    , nl_inputs[:,   np.shape(data_inputs)[1] -3:np.shape(data_inputs)[1] -1] ], axis =1 ) )
-    mc_tempmatrix   = xgboost.DMatrix( np.concatenate( [mc_inputs[:,:9]  , mc_hcalIso.reshape(-1,1)    , mc_inputs[:,9:np.shape(data_inputs)[1] -3]   ,mc_conditions[:,1] .reshape(-1,1)   , mc_conditions[:,3].reshape(-1,1)    , mc_inputs[:,   np.shape(data_inputs)[1] -3:np.shape(data_inputs)[1] -1] ], axis =1 ) )
+    data_tempmatrix = xgboost.DMatrix( np.concatenate( [data_inputs[:,:9], data_conditions[:,1].reshape(-1,1) ,data_conditions[:,3].reshape(-1,1)  , data_inputs[:, np.shape(data_inputs)[1] -3:np.shape(data_inputs)[1] -1] ], axis =1 ) )
+    nl_tempmatrix   = xgboost.DMatrix( np.concatenate( [nl_inputs[:,:9]  , mc_conditions[:,1].reshape(-1,1)   ,mc_conditions[:,3].reshape(-1,1)    , nl_inputs[:,   np.shape(data_inputs)[1] -3:np.shape(data_inputs)[1] -1] ], axis =1 ) )
+    mc_tempmatrix   = xgboost.DMatrix( np.concatenate( [mc_inputs[:,:9]  , mc_conditions[:,1].reshape(-1,1)   ,mc_conditions[:,3].reshape(-1,1)    , mc_inputs[:,   np.shape(data_inputs)[1] -3:np.shape(data_inputs)[1] -1] ], axis =1 ) )
+
+
+    print( '\n\n\n\n' )
+    print( 'Shape do array input para o endcap ID: ', np.shape( np.concatenate( [data_inputs[:,:9], data_conditions[:,1].reshape(-1,1) ,data_conditions[:,3].reshape(-1,1)  , data_inputs[:, np.shape(data_inputs)[1] -3:np.shape(data_inputs)[1] -1] ], axis =1 ) ) )
+    print( '\n\n\n\n' )
 
     #evaluating the network!
     data_mvaID = photonid_mva.predict(data_tempmatrix)
@@ -474,11 +479,9 @@ def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data
     mc_mvaID = photonid_mva.predict(mc_tempmatrix)
 
     # needed transformation. See more details oin HiggsDNA -> https://gitlab.cern.ch/HiggsDNA-project/HiggsDNA/-/blob/master/higgs_dna/tools/photonid_mva.py?ref_type=heads#L56
-    data_mvaID = 1 - (2/(1+np.exp( 2*data_mvaID )))
-    nl_mvaID   = 1 - (2/(1+np.exp( 2*nl_mvaID )))
-    mc_mvaID   = 1 - (2/(1+np.exp( 2*mc_mvaID )))
-
-    plot_profile_endcap( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
+    data_mvaID = -1 + 2*data_mvaID #1 - (2/(1+np.exp( 2*data_mvaID )))
+    nl_mvaID   = -1 + 2*nl_mvaID   #1 - (2/(1+np.exp( 2*nl_mvaID )))
+    mc_mvaID   = -1 + 2*mc_mvaID   #1 - (2/(1+np.exp( 2*mc_mvaID )))
 
     # now, we create and fill the histograms with the mvaID distributions
     mc_mva      = hist.Hist(hist.axis.Regular(30, -0.9, 1.0))
@@ -490,6 +493,8 @@ def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data
     data_mva.fill( data_mvaID, weight = (1e6)*data_weights  )
 
     plott( data_mva , mc_mva, nl_mva , plot_path + '/mvaID_endcap.png', xlabel = "End cap mvaID"  )
+
+    #plot_profile_endcap( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
 
 def plot_distributions_after_transformations(
     var_list,
@@ -542,18 +547,23 @@ def plot_distributions_after_transformations(
         variable_name = var_list[i]
 
         # Extract data for the variable
-        data_values = training_inputs[data_mask, i]
-        mc_values = training_inputs[mc_mask, i]
-        mc_weights = training_weights[mc_mask]
+        data_values = np.nan_to_num(training_inputs[data_mask, i])
+        mc_values   = np.nan_to_num(training_inputs[mc_mask, i])
+        mc_weights  = training_weights[mc_mask]
 
         # Compute mean and standard deviation for data histogram binning
         mean = np.mean(data_values)
         std = np.std(data_values)
 
+        print( variable_name )
+        print( data_values[:10] )
+        print( mc_values[:10] )
+        print( '\n\n' )
+
         # Create histograms with appropriate binning
         #bins = hist.axis.Regular(70, mean - 3.0 * std, mean + 3.0 * std)
         bins = hist.axis.Regular(70, -5.0, 5.0)
-        bins = hist.axis.Regular(70, np.min(data_values) , np.max(data_values))
+        #bins = hist.axis.Regular(70, mean - 3*std , mean + 3*std)
         data_hist = hist.Hist(bins)
         mc_hist = hist.Hist(bins)
 
