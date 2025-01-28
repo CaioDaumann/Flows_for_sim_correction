@@ -47,7 +47,7 @@ def main():
 
         # Reading the files as a dataframe
         files = glob.glob( args.mcfilespath ) #+ systematic + "/*.parquet" )
-        files = files[:150]
+        #files = files[:150]
         if len(files) == 0:
             print( "\nSystematic ", systematic , " is not avaliable in the path: ", args.mcfilespath  )
             continue
@@ -158,7 +158,7 @@ def main():
                 mc_df[ "sigma_m_over_m_smeared_corr" ] = utils.calculate_corrected_smeared_sigma_m_over_m(mc_df)
 
         # Dumping the df file with the new entries
-        mc_df.to_parquet( args.outpath + "/Zmmg_out_Fix_AR.parquet")
+        mc_df.to_parquet( args.outpath + "/Zee_with_flows.parquet")
         print('\n\nFinished!\n')
         exit()
 
