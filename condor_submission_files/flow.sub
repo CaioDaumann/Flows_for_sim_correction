@@ -1,19 +1,21 @@
-#Specify any required software, devices or machines
-requirements = (Machine == "lx3agpu2.physik.rwth-aachen.de")
+#Specify any required software, devices, or machines
+#requirements = (Machine == "lx3agpu1.physik.rwth-aachen.de") | (Machine == "lx3agpu2.physik.rwth-aachen.de") | (Machine == "lx3agpu3.physik.rwth-aachen.de") | (Machine == "lx3agpu4.physik.rwth-aachen.de")
+HostGroup = "LX Cluster/Clients/Batch only" 
 
 executable     = flow.sh
 
-log            = flow_NSF_Iso_High_stats.log
-output         = flow_NSF_Iso_High_Stats.out
-error          = flow_NSF_Iso_High_Stats.err
+log            = condor_files/flow_NSF_Iso_High_stats_$(Process).log
+output         = condor_files/flow_NSF_Iso_High_Stats_$(Process).out
+error          = condor_files/flow_NSF_Iso_High_Stats_$(Process).err
 
-output = flow.out$(Process)
-
-transfer_input_files = main.py,flow_configuration.yaml
+transfer_input_files = main.py,flow_configuration.yaml,var_training_list.yaml, run3_mvaID_models/model_endcap.json, run3_mvaID_models/model.json
 
 request_cpus   = 4
-request_memory = 50000
-
+request_memory = 20000
 request_GPUs   = 1
 
-queue
+# Pass the unique process ID as an argument to the script
+arguments = $(Process)
+
+queue 1
+

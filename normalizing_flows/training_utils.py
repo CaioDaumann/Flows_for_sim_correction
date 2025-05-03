@@ -117,7 +117,9 @@ class Simulation_correction():
         # Normalizing the weights to one
         #self.training_weights = self.training_weights/torch.sum( self.training_weights )
 
+
         for epoch in range(999):
+            training_running_loss = 0.0
             for batch in range(2000):
 
                 #making the graidients zero
@@ -134,26 +136,29 @@ class Simulation_correction():
                 torch.nn.utils.clip_grad_norm_(self.flow.parameters(), 1.0e-1)
 
                 self.optimizer.step()
+                training_running_loss = training_running_loss + float(loss)
+                
+            training_running_loss = training_running_loss/2000
 
             # End of the epoch! - calculating the validation loss and saving nescessary information!
             torch.save(self.flow.state_dict(), os.getcwd() + "/results/saved_states/epoch_"+str(epoch)+".pth")
             # Switching off the gradients calculation for the validation phase
             with torch.no_grad():
 
-                # evaluatin the validation loss
-                idxs = torch.randint(low=0, high= self.validation_conditions.size()[0], size= (10024,))
+                # Evaluating the validation loss - Lets not use all events in order to save time
+                idxs = torch.randint(low=0, high= self.validation_conditions.size()[0], size= (25024,))
 
                 validation_loss = torch.tensor(abs(self.validation_weights[idxs])).to(self.device)*(-self.flow(self.validation_conditions[idxs]).log_prob( self.validation_inputs[idxs] ))
                 validation_loss = validation_loss.mean()
 
                 # saving the losses for further plotting and monitoring!
-                self.training_loss_array.append(   float(loss) )
+                self.training_loss_array.append(   float(training_running_loss) )
                 self.validation_loss_array.append( float(validation_loss) )
 
                 # updating the lr scheduler
                 self.scheduler.step( validation_loss )
 
-                print( 'Epoch: ', epoch , ' Training loss: ', float( loss ) , ' Validation loss: ', float(validation_loss) )
+                print( 'Epoch: ', epoch , ' Training loss: ', float( training_running_loss ) , ' Validation loss: ', float(validation_loss) )
 
                 if( self.early_stopper.early_stop( float( validation_loss ) ) or epoch > self.max_epoch_number ):
 
@@ -198,8 +203,8 @@ class Simulation_correction():
             np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'conditions_means.npy', self.condition_mean_for_std)
             np.save( os.getcwd() + '/results/' +self.configuration + '/'  +  'conditions_std.npy' , self.condition_std_for_std )
 
-            np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'max_values.npy' , self.max_values )
-            np.save( os.getcwd() + '/results/' +self.configuration + '/'  + 'min_values.npy' , self.min_values )
+            #np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'max_values.npy' , self.max_values )
+            #np.save( os.getcwd() + '/results/' +self.configuration + '/'  + 'min_values.npy' , self.min_values )
 
             # now, lets invert the transformations
             self.invert_transformation()
@@ -298,7 +303,9 @@ class Simulation_correction():
             self.mc_test_inputs = ( self.mc_test_inputs - self.input_mean_for_std  )/self.input_std_for_std
             self.mc_test_conditions[:,:-1] = ( self.mc_test_conditions[:,:-1] - self.condition_mean_for_std  )/self.condition_std_for_std
 
+        # Lets not apply this for now!
         # Lets apply min max scale to the variables that undergo the shift and scale transformation
+        """ 
         self.max_values = self.training_inputs[  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ][:,self.indexes_for_iso_transform].max(dim=0).values
         self.min_values = self.training_inputs[  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ][:,self.indexes_for_iso_transform].min(dim=0).values
 
@@ -315,13 +322,16 @@ class Simulation_correction():
             self.mc_test_inputs[:,self.indexes_for_iso_transform] = -5 + (
                 (self.mc_test_inputs[:,self.indexes_for_iso_transform] - self.min_values) * 10
             ) / (self.max_values - self.min_values)
-
+        """
+        
         # Lets now plot the distirbutions after the transformations
         plot_utils.plot_distributions_after_transformations(self.variables_list ,self.training_inputs.clone().detach().cpu(), self.conditions_list ,self.training_conditions.clone().detach().cpu(), self.training_weights.clone().detach().cpu())
 
     # this function will be responsable to perform the inverse transformations in data
     def invert_transformation(self):
         
+        # Lets not apply this for now!
+        """ 
         if len(self.indexes_for_iso_transform) > 0:
             # Revert the min-max scaling from [-4, 4] back to original
             self.training_inputs[:,self.indexes_for_iso_transform] = self.min_values + (
@@ -339,6 +349,7 @@ class Simulation_correction():
             self.samples[:,self.indexes_for_iso_transform] = self.min_values + (
                 (self.samples[:,self.indexes_for_iso_transform] + 5) * (self.max_values - self.min_values)
             ) / 10          
+        """
         
         # Transforming the training tensors
         if( self.perform_std_transform ):
@@ -392,7 +403,7 @@ class Simulation_correction():
     def read_saved_tensor(self):
 
         # this is defined in the read_data.py ...
-        path_to_save_tensors = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/data_reading/saved_tensors/zee_tensors/"
+        path_to_save_tensors = "/net/data_cms3a-1/daumann/PhD/EarlyHgg/simulation_to_data_corrections/data_reading/saved_tensors/zee_tensors/"
 
         # reading the training tesnors
         self.data_training_inputs      = torch.load( path_to_save_tensors + 'data_training_inputs.pt' )

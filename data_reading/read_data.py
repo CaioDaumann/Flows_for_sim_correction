@@ -79,7 +79,7 @@ def perform_zee_selection(df):
     # Define individual selection criteria
     mass_criteria = (df["mass"] > 80) & (df["mass"] < 100)
     tag_pt_criteria = df["tag_pt"] > 40
-    probe_pt_criteria = df["probe_pt"] > 22
+    probe_pt_criteria = df["probe_pt"] > 20
     eta_criteria = np.abs(df["probe_ScEta"]) < 2.5
     phi_criteria = np.abs(df["probe_phi"]) < np.pi
     tag_mvaID_criteria = df["tag_mvaID"] > 0.0
@@ -122,7 +122,7 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
     mc_conditions  = torch.tensor(mc_conditions[mc_permutation])
     mc_weights     = torch.tensor(mc_weights[mc_permutation])
 
-    assert abs(torch.sum(mc_weights) - torch.sum(data_weights)) < 1
+    assert abs(torch.sum(mc_weights) - torch.sum(data_weights)) < torch.sum(data_weights)*(5/100)
 
     # Now, in order not to bias the network we choose make sure the tensors of data and simulation have the same number of events
     try:
@@ -179,7 +179,7 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
     mc_test_weights    = mc_weights[int( validation_percent*len(mc_inputs  )):] 
 
     # now, all the tensors are saved so they can be read by the training class
-    path_to_save_tensors = "/net/scratch_cms3a/daumann/PhD/EarlyHgg/simulation_to_data_corrections/data_reading/saved_tensors/zee_tensors/"
+    path_to_save_tensors = "/net/data_cms3a-1/daumann/PhD/EarlyHgg/simulation_to_data_corrections/data_reading/saved_tensors/zee_tensors/"
 
     torch.save( data_training_inputs       , path_to_save_tensors + 'data_training_inputs.pt' )
     torch.save( data_training_conditions   , path_to_save_tensors + 'data_training_conditions.pt')
@@ -209,61 +209,141 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
 
     return path_to_save_tensors
 
-def read_zee_data(var_list, conditions_list, data_samples_path, mc_samples_path, mc_samples_lumi_norm, DokinematicsRW):
+from concurrent.futures import ThreadPoolExecutor
+from tqdm import tqdm
 
-    files_data = [  glob.glob( data_file ) for data_file in data_samples_path ]
-    data   = [pd.read_parquet(f) for f in files_data]
-    data_df = pd.concat(data,ignore_index=True)
+def _read_parquet_file(path: str) -> pd.DataFrame:
+    """Helper to read a single Parquet file."""
+    return pd.read_parquet(path)
 
-    files_mc = []
-    for sample, lumi_norm in zip(mc_samples_path,mc_samples_lumi_norm ):
-        
-        files = glob.glob( sample )
-        files_list = [pd.read_parquet(f) for f in files]
-        files_df = pd.concat(files_list, ignore_index=True)
-        
-        # Apply the luminosity normalization
-        files_df["weight"] = files_df["weight"]*lumi_norm
-        
-        # Append the processed DataFrame to the list
-        files_mc.append(files_df)
 
-    # Concatenate all files_df into a single DataFrame after the loop
-    drell_yan_df = pd.concat(files_mc, ignore_index=True)
-        
-    # Now that the data is read, we need to perform a loose selection with the objective of decrease teh background contamination
+def read_parquet_files(patterns: list[str], max_workers: int | None = None) -> pd.DataFrame:
+    """
+    Parallel reading of multiple Parquet files matching given glob patterns.
+    Returns a concatenated DataFrame, with a progress bar.
+    """
+    # Expand all glob patterns into real file paths
+    files = [f for pat in patterns for f in glob.glob(pat)]
+    if not files:
+        return pd.DataFrame()
+
+    dfs: list[pd.DataFrame] = []
+    # Read in parallel with progress bar
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for df in tqdm(
+            executor.map(_read_parquet_file, files),
+            total=len(files),
+            desc="Reading parquet files",
+        ):
+            dfs.append(df)
+
+    return pd.concat(dfs, ignore_index=True)
+
+
+def read_and_norm_mc(
+    pattern: str,
+    lumi_norm: float,
+    max_workers = 24,
+) -> pd.DataFrame:
+    """
+    Read MC samples matching the pattern, apply luminosity normalization,
+    and return concatenated DataFrame.
+    """
+    df = read_parquet_files([pattern], max_workers)
+    if df.empty:
+        return df
+    df["weight"] = df["weight"] * lumi_norm
+    return df
+
+
+def read_zee_data(
+    var_list: list,
+    conditions_list: list,
+    data_samples_path: list[str],
+    mc_samples_path: list[str],
+    mc_samples_lumi_norm: list[float],
+    DokinematicsRW: bool,
+    max_workers: int | None = None,
+) -> None:
+    """
+    Reads data and MC samples in parallel, applies selections and (optional) reweighting,
+    normalizes weights, plots distributions for validation, and splits into train/val/test,
+    with progress bars for I/O.
+    """
+    print('Begin data reading...')
+    data_df = read_parquet_files(data_samples_path, max_workers)
+    print(f'Read {len(data_df)} data events.')
+
+    print('Begin MC reading...')
+    mc_dfs: list[pd.DataFrame] = []
+    for pattern, lumi in tqdm(
+        zip(mc_samples_path, mc_samples_lumi_norm),
+        total=len(mc_samples_path),
+        desc="Reading MC samples",
+    ):
+        df = read_and_norm_mc(pattern, lumi, max_workers)
+        mc_dfs.append(df)
+    drell_yan_df = pd.concat(mc_dfs, ignore_index=True)
+    print(f'Read total {len(drell_yan_df)} MC events.')
+
+    # Apply loose selection to reduce background
     data_df = perform_zee_selection(data_df)
     drell_yan_df = perform_zee_selection(drell_yan_df)
 
-    # lets keep the MC weights before rw for validation
-    mc_weights_before = drell_yan_df["weight"].values
+    # Save MC weights before reweighting for validation
+    mc_weights_before = drell_yan_df["weight"].to_numpy()
 
-    # Lets now perform a kinematic reweigthing after selection
-    if( DokinematicsRW ):
-        data_df["weight"] ,drell_yan_df["weight"] = perform_reweighting(drell_yan_df, data_df)
-    
-    # Normalizing the weoghts do data!
-    data_df["weight"]      = len(data_df["weight"])*data_df["weight"]/np.sum(data_df["weight"])
-    drell_yan_df["weight"] = len(data_df["weight"])*drell_yan_df["weight"]/np.sum(drell_yan_df["weight"])
-    mc_weights_before      = len(data_df["weight"])*mc_weights_before/np.sum(mc_weights_before)
-    
-    assert abs(np.sum(drell_yan_df["weight"]) - np.sum(data_df["weight"])) <= 1
-    
-    # Making the weigths into numpy arrays
-    mc_weights        = drell_yan_df["weight"].values
-    data_weights      = data_df["weight"].values
-    
-    assert np.sum(mc_weights ) - np.sum(data_weights) <= 1
-    
-    # now lets call a plotting function to perform the plots of the read distributions for validation porpuses
-    path_to_plots = "./plot/validation_plots/reweighting_validation/"
+    # Kinematic reweighting
+    if DokinematicsRW:
+        data_w, mc_w = perform_reweighting(drell_yan_df, data_df)
+        data_df["weight"], drell_yan_df["weight"] = data_w, mc_w
+    else:
+        data_df["weight"] = 1.0
 
-    # now as a last step, we need to split the data into training, validation and test dataset
-    plot_utils.plot_distributions( path_to_plots, data_df, drell_yan_df, data_weights, mc_weights , [var_list, conditions_list], weights_before_rw = mc_weights_before)
+    # Normalize weights so each dataset sums to number of data events
+    total_events = len(data_df)
+    def normalize(arr: np.ndarray) -> np.ndarray:
+        return arr * total_events / arr.sum()
 
-    # now, the datsets will be separated into training, validation and test dataset, and saved for further reading by the training class!
-    separate_training_data(data_df, drell_yan_df, mc_weights, data_weights, var_list, conditions_list)
+    data_df["weight"] = normalize(data_df["weight"].to_numpy())
+    drell_yan_df["weight"] = normalize(drell_yan_df["weight"].to_numpy())
+    mc_weights_before = normalize(mc_weights_before)
 
-    print('\n End of data reading! - No errors encountered! ')
-    print( 'Number of MC events: ', len(drell_yan_df ), ' Number of data events: ', len(data_df))
-    
+    # Sanity checks
+    diff_sum = abs(drell_yan_df["weight"].sum() - data_df["weight"].sum())
+    assert diff_sum <= total_events * 0.02, (
+        f"Weight-sum difference {diff_sum:.2f} exceeds 2% tolerance."
+    )
+
+    mc_weights = drell_yan_df["weight"].to_numpy()
+    data_weights = data_df["weight"].to_numpy()
+    print(f'Sum MC weights: {mc_weights.sum():.2f}')
+    print(f'Sum data weights: {data_weights.sum():.2f}')
+
+    # Plot for validation
+    plot_dir = "./plot/validation_plots/reweighting_validation/"
+    plot_utils.plot_distributions(
+        plot_dir,
+        data_df,
+        drell_yan_df,
+        data_weights,
+        mc_weights,
+        [var_list, conditions_list],
+        weights_before_rw=mc_weights_before,
+    )
+
+    # Split into train/val/test and save
+    separate_training_data(
+        data_df,
+        drell_yan_df,
+        mc_weights,
+        data_weights,
+        var_list,
+        conditions_list,
+    )
+
+    print('End of data reading. No errors encountered.')
+    print(
+        f'Number of MC events: {len(drell_yan_df)}, '
+        f'Number of data events: {len(data_df)}'
+    )

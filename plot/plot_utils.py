@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import mplhep, hist
 plt.style.use([mplhep.style.CMS])
+from hist import storage
 import mplhep as hep
 import xgboost
 import os
@@ -92,6 +93,21 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
         ax[1].add_patch(rect_)    
     
     hep.histplot(
+            data_hist,
+            density=True,
+            label = r'Data',
+            yerr=True,
+            xerr=False,
+            color="black",
+            #linewidth=3,
+            histtype='errorbar',
+            markersize=12,
+            elinewidth=3,
+            ax=ax[0],
+            flow='sum'
+        )
+    
+    hep.histplot(
                 mc_hist,
                 density=True,
                 label = r'Simulation',
@@ -119,20 +135,6 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
     # Apply hatching to the filled area
     # ax.patches[0].set_hatch('/')  # Apply hatching pattern to the filled area
 
-    hep.histplot(
-            data_hist,
-            density=True,
-            label = r'Data',
-            yerr=True,
-            xerr=False,
-            color="black",
-            #linewidth=3,
-            histtype='errorbar',
-            markersize=12,
-            elinewidth=3,
-            ax=ax[0],
-            flow='sum'
-        )
 
     ax[0].set_xlabel('')
     ax[0].margins(y=0.15)
@@ -148,18 +150,18 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
     # Line at 1
     ax[1].axhline(1, 0, 1, label=None, linestyle='--', color="black", linewidth=1)#, alpha=0.5)
 
-    data_hist_numpy = data_hist.to_numpy()
-    mc_hist_numpy   = mc_hist.to_numpy()
+    data_hist_numpy    = data_hist.to_numpy()
+    mc_hist_numpy      = mc_hist.to_numpy()
     mc_hist_rw_numpy   = mc_rw_hist.to_numpy()
 
-    integral_data = data_hist.sum() * (data_hist_numpy[1][1] - data_hist_numpy[1][0])
-    integral_mc = mc_hist.sum() * (mc_hist_numpy[1][1] - mc_hist_numpy[1][0])
+    integral_data = data_hist.values().sum() * (data_hist_numpy[1][1] - data_hist_numpy[1][0])
+    integral_mc   = mc_hist.values().sum() * (mc_hist_numpy[1][1] - mc_hist_numpy[1][0])
 
     # Ratio betwenn normalizng flows prediction and data
     ratio = (data_hist_numpy[0] / integral_data) / ( (mc_hist_numpy[0] + 1e-15 ) / integral_mc)
     ratio = np.nan_to_num(ratio)
 
-    integral_mc_rw = mc_rw_hist.sum() * (mc_hist_rw_numpy[1][1] - mc_hist_rw_numpy[1][0])
+    integral_mc_rw = mc_rw_hist.values().sum() * (mc_hist_rw_numpy[1][1] - mc_hist_rw_numpy[1][0])
     ratio_rw = (data_hist_numpy[0] / integral_data) / ( (mc_hist_rw_numpy[0] +1e-15 ) / integral_mc_rw)
     ratio_rw = np.nan_to_num(ratio_rw)
 
@@ -265,17 +267,23 @@ def plot_distributions( path, data_df, mc_df, data_weights, mc_weights, variable
 
     for variable_group in variables_to_plot:
         for variable in variable_group:
+            
+            print( variable )
+            
             # Clean the variable name by removing '_raw' if present
             clean_variable = variable.replace('_raw', '')
 
             # Extract data for the variable
             data_values = data_df[clean_variable].dropna().values
-            mc_values = mc_df[variable].dropna().values
+            mc_values   = mc_df[variable].dropna().values
 
             # Compute mean and standard deviation for data histogram binning
             mean = np.mean(data_values)
             std = np.std(data_values)
 
+            print( 'mean: ', mean , ' std: ', std )
+            
+        
             # Define histogram bin edges based on the variable name
             if 'Iso' in variable or 'DR' in variable:
                 bin_edges = np.linspace(0.0, 3.5, 101)
@@ -288,9 +296,9 @@ def plot_distributions( path, data_df, mc_df, data_weights, mc_weights, variable
 
             # Create histograms
             bins = hist.axis.Variable(bin_edges)
-            data_hist = hist.Hist(bins)
-            mc_hist = hist.Hist(bins)
-            mc_rw_hist = hist.Hist(bins)
+            data_hist = hist.Hist(bins, storage=storage.Weight())
+            mc_hist = hist.Hist(bins, storage=storage.Weight())
+            mc_rw_hist = hist.Hist(bins, storage=storage.Weight())
 
             # Fill histograms
             data_hist.fill(data_values, weight=data_weights)
@@ -299,10 +307,29 @@ def plot_distributions( path, data_df, mc_df, data_weights, mc_weights, variable
             else:
                 mc_hist.fill(mc_values)
             mc_rw_hist.fill(mc_values, weight=mc_weights)
+            
+            fig, ax = plt.subplots(2, 1, gridspec_kw={'height_ratios': [4, 1]}, sharex=True)
+
+            hep.histplot(
+                    data_hist,
+                    density=True,
+                    label = r'Data',
+                    yerr=True,
+                    xerr=False,
+                    color="black",
+                    #linewidth=3,
+                    histtype='errorbar',
+                    markersize=12,
+                    elinewidth=3,
+                    ax=ax[0],
+                    flow='sum'
+                )
 
             # Plot and save the histograms
             output_path = os.path.join(path, f"{variable}.png")
             plott(data_hist, mc_hist, mc_rw_hist, output_path, xlabel=variable)
+            
+            
 
 def plot_distributions_for_tensors(
     data_tensor,
@@ -357,9 +384,9 @@ def plot_distributions_for_tensors(
             bins = hist.axis.Regular(50, bin_min, bin_max)
 
         # Create histograms
-        data_hist = hist.Hist(bins)
-        mc_hist = hist.Hist(bins)
-        mc_rw_hist = hist.Hist(bins)
+        data_hist = hist.Hist(bins, storage=storage.Weight())
+        mc_hist = hist.Hist(bins, storage=storage.Weight())
+        mc_rw_hist = hist.Hist(bins, storage=storage.Weight())
 
         # Fill histograms
         data_hist.fill(data_values)
@@ -425,9 +452,9 @@ def plot_mvaID_curve(mc_inputs,data_inputs,nl_inputs, mc_conditions, data_condit
     plot_profile_barrel( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
 
     # now, we create and fill the histograms with the mvaID distributions
-    mc_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
-    nl_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
-    data_mva    = hist.Hist(hist.axis.Regular(42, -0.9, 1.0))
+    mc_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0), storage=storage.Weight())
+    nl_mva      = hist.Hist(hist.axis.Regular(42, -0.9, 1.0), storage=storage.Weight())
+    data_mva    = hist.Hist(hist.axis.Regular(42, -0.9, 1.0), storage=storage.Weight())
 
     mc_mva.fill( mc_mvaID, weight = (1e6)*mc_weights )
     nl_mva.fill( nl_mvaID, weight = (1e6)*mc_weights )
@@ -481,9 +508,9 @@ def plot_mvaID_curve_endcap(mc_inputs,data_inputs,nl_inputs, mc_conditions, data
     plot_profile_endcap( nl_mvaID, mc_mvaID ,mc_conditions,  data_mvaID, data_conditions, mc_weights, data_weights, plot_path)
 
     # now, we create and fill the histograms with the mvaID distributions
-    mc_mva      = hist.Hist(hist.axis.Regular(30, -0.9, 1.0))
-    nl_mva      = hist.Hist(hist.axis.Regular(30, -0.9, 1.0))
-    data_mva    = hist.Hist(hist.axis.Regular(30, -0.9, 1.0))
+    mc_mva      = hist.Hist(hist.axis.Regular(30, -0.9, 1.0), storage=storage.Weight())
+    nl_mva      = hist.Hist(hist.axis.Regular(30, -0.9, 1.0), storage=storage.Weight())
+    data_mva    = hist.Hist(hist.axis.Regular(30, -0.9, 1.0), storage=storage.Weight())
 
     mc_mva.fill( mc_mvaID, weight     = (1e6)*mc_weights )
     nl_mva.fill( nl_mvaID, weight     = (1e6)*mc_weights )
@@ -554,8 +581,8 @@ def plot_distributions_after_transformations(
         #bins = hist.axis.Regular(70, mean - 3.0 * std, mean + 3.0 * std)
         bins = hist.axis.Regular(70, -5.0, 5.0)
         bins = hist.axis.Regular(70, np.min(data_values) , np.max(data_values))
-        data_hist = hist.Hist(bins)
-        mc_hist = hist.Hist(bins)
+        data_hist = hist.Hist(bins, storage=storage.Weight())
+        mc_hist = hist.Hist(bins, storage=storage.Weight())
 
         # Fill histograms
         data_hist.fill(data_values)
@@ -581,8 +608,8 @@ def plot_distributions_after_transformations(
 
         # Create histograms with appropriate binning
         bins = hist.axis.Regular(70, mean - 3.0 * std, mean + 3.0 * std)
-        data_hist = hist.Hist(bins)
-        mc_hist = hist.Hist(bins)
+        data_hist = hist.Hist(bins, storage=storage.Weight())
+        mc_hist = hist.Hist(bins, storage=storage.Weight())
 
         # Fill histograms
         data_hist.fill(data_values)
@@ -1021,17 +1048,17 @@ def plot_distributions__( path, data_df, mc_df, data_weights, mc_weights, variab
             std  = np.std(  np.nan_to_num(np.array(data_df[key.replace('_raw','')])) )
 
             if( 'Iso' in key or 'DR' in key   ):
-                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
-                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 3.5))
+                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 3.5), storage=storage.Weight())
+                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 3.5), storage=storage.Weight())
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 3.5), storage=storage.Weight())
             elif( 'hoe' in  key ):
-                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
-                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 0.08))
+                data_hist            = hist.Hist(hist.axis.Regular(100, 0.0, 0.08), storage=storage.Weight())
+                mc_hist              = hist.Hist(hist.axis.Regular(100, 0.0, 0.08), storage=storage.Weight())
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, 0.0, 0.08), storage=storage.Weight())
             else:
-                data_hist            = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
-                mc_hist              = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
-                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std))
+                data_hist            = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std), storage=storage.Weight())
+                mc_hist              = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std), storage=storage.Weight())
+                mc_rw_hist           = hist.Hist(hist.axis.Regular(100, mean - 3.0*std, mean + 4.0*std), storage=storage.Weight())
 
             data_hist.fill( np.array(data_df[key.replace('_raw','')]   ) , weight = data_weights )
             
