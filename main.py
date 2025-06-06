@@ -66,7 +66,7 @@ def main():
         
         IsAutoRegressive = dictionary[key]["IsAutoRegressive"]
 
-        re_process_data = True
+        re_process_data = False
         if( re_process_data ):
             data_reader.read_zee_data(var_list, conditions_list, data_samples_path, mc_samples_path, mc_samples_lumi_norm, DoKinematicsRW)
 

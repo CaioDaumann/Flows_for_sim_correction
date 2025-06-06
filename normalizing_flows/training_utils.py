@@ -5,6 +5,7 @@ import glob
 import torch
 import pandas as pd
 import zuko
+import json
 
 # importing other scripts
 import plot.plot_utils        as plot_utils
@@ -53,24 +54,8 @@ class Simulation_correction():
 
         # Checking if cuda is avaliable
         print('Checking cuda avaliability: ', torch.cuda.is_available())
-        device = torch.device('cpu' if torch.cuda.is_available() else 'cpu')
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.device = device
-
-        #reading important tensors
-        self.read_saved_tensor()
-        self.remove_energy_raw_from_training()
-        self.perform_transformation()
-        
-        # defining the flow hyperparametrs as menbers of the class
-        self.n_transforms   = n_transforms
-        self.n_splines_bins = n_splines_bins
-        self.aux_nodes      = aux_nodes
-        self.aux_layers     = aux_layers
-
-        # general training hyperparameters
-        self.max_epoch_number = max_epoch_number
-        self.initial_lr       = initial_lr
-        self.batch_size       = batch_size
 
         # Now, lets open a directory to store the results and models of a given configuration
         self.configuration =  configuration
@@ -87,16 +72,48 @@ class Simulation_correction():
         # folder to which the code will store the results
         self.dump_folder = os.getcwd() + '/results/' +self.configuration + '/'
 
+        #reading important tensors
+        self.read_saved_tensor()
+        self.remove_energy_raw_from_training()
+        self.perform_transformation()
+        
+        # defining the flow hyperparametrs as menbers of the class
+        self.n_transforms   = n_transforms
+        self.n_splines_bins = n_splines_bins
+        self.aux_nodes      = aux_nodes
+        self.aux_layers     = aux_layers
+
+        # general training hyperparameters
+        self.max_epoch_number = max_epoch_number
+        self.initial_lr       = initial_lr
+        self.batch_size       = batch_size
+        
+        ####### defining a config object so the model can be loaded from it
+        self.config = {
+            "model": "NSF",
+            "input_dim":    self.training_inputs.size(1),
+            "context_dim":  self.training_conditions.size(1),
+            "n_splines_bins": self.n_splines_bins,
+            "n_transforms":   self.n_transforms,
+            "hidden_features": [self.aux_nodes] * self.aux_layers,
+            "n_passes_flow":   self.n_passes_flow,
+            "device": str(self.device)
+        }
+
 
     # performs the training of the normalizing flows
     def setup_flow(self):
+
+        ### lets save the information as .txt in the dump directory so we know the model configuration
+        with open(self.dump_folder + "model_configuration.txt", "w") as f:
+            json.dump(self.config, f, indent=4)
 
         # The library we are using is zuko! - passes = 2 for coupling blocks!
         flow = zuko.flows.NSF(self.training_inputs.size()[1], context=self.training_conditions.size()[1], bins = self.n_splines_bins ,transforms = self.n_transforms, hidden_features=[self.aux_nodes] * self.aux_layers, passes = self.n_passes_flow)
         flow.to(self.device)
         self.flow = flow
 
-        self.optimizer = torch.optim.AdamW(self.flow.parameters(), lr= self.initial_lr, weight_decay=1e-6)
+        self.optimizer = torch.optim.AdamW(self.flow.parameters(), lr= self.initial_lr, weight_decay=1e-5)
 
         #defining the parameters of the lr scheduler and early stopper!
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', patience = 8)
@@ -133,7 +150,7 @@ class Simulation_correction():
 
                 loss.backward()
 
-                torch.nn.utils.clip_grad_norm_(self.flow.parameters(), 1.0e-1)
+                torch.nn.utils.clip_grad_norm_(self.flow.parameters(), 1.0)
 
                 self.optimizer.step()
                 training_running_loss = training_running_loss + float(loss)
@@ -146,7 +163,7 @@ class Simulation_correction():
             with torch.no_grad():
 
                 # Evaluating the validation loss - Lets not use all events in order to save time
-                idxs = torch.randint(low=0, high= self.validation_conditions.size()[0], size= (25024,))
+                idxs = torch.randint(low=0, high= self.validation_conditions.size()[0], size= (122024,))
 
                 validation_loss = torch.tensor(abs(self.validation_weights[idxs])).to(self.device)*(-self.flow(self.validation_conditions[idxs]).log_prob( self.validation_inputs[idxs] ))
                 validation_loss = validation_loss.mean()
@@ -179,32 +196,77 @@ class Simulation_correction():
     # load the trained model and perform the final plots!
     def evaluate_results(self):
         
+        self.mc_test_inputs , self.mc_test_conditions , self.mc_test_weights = self.mc_test_inputs[:2500000] , self.mc_test_conditions[:2500000] , self.mc_test_weights[:2500000]
+        self.mc_test_inputs_energy_raw = self.mc_test_inputs_energy_raw[:2500000]
+        
+        ### defining a test dataset and dataloader
+        self.test_dataset = torch.utils.data.TensorDataset(self.mc_test_inputs , self.mc_test_conditions , self.mc_test_weights)
+        self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset   , batch_size=8128           )
+        
+        MaskOnlyvalidationMC       = self.validation_conditions[:,self.validation_conditions.size()[1] -1 ] == 0
+        self.validation_conditions = self.validation_conditions[MaskOnlyvalidationMC]
+        self.validation_inputs     = self.validation_inputs[MaskOnlyvalidationMC]            
+        self.validation_weights    = self.validation_weights[MaskOnlyvalidationMC]
+        
         with torch.no_grad():
+            
+            ### From 'data' to latent space
+            for batch in self.test_dataloader:
+                inputs, conditions, weights = batch
+                inputs = inputs.to(self.device)
+                conditions = conditions.to(self.device)
+                weights = weights.to(self.device)
 
-            # Results are evaluated in the test dataset, never seen by the neural network!
-            # A mask is applied so only MC events are chossen from the data space
-            MaskOnlyvalidationMC       = self.validation_conditions[:,self.validation_conditions.size()[1] -1 ] == 0
-            self.validation_conditions = self.validation_conditions[MaskOnlyvalidationMC]
-            self.validation_inputs     = self.validation_inputs[MaskOnlyvalidationMC]
-            self.validation_weights    = self.validation_weights[MaskOnlyvalidationMC]
+                # Transform the data to the latent space
+                latent = self.flow(conditions).transform(inputs)
 
-            trans      = self.flow(self.mc_test_conditions).transform
-            sim_latent = trans(    self.mc_test_inputs )
+                conditions = torch.cat([conditions[:,:-1], torch.ones_like(conditions[:,-1]).view(-1,1)], dim = 1)
 
-            self.mc_test_conditions = torch.tensor(np.concatenate( [ self.mc_test_conditions[:,:-1].cpu() , np.ones_like( self.mc_test_conditions[:,0].cpu() ).reshape(-1,1) ], axis =1 )).to( self.device )
+                # Store the transformed data
+                if 'latent_data' not in locals():
+                    latent_data = latent
+                    conditions_data = conditions
+                    weights_data = weights
+                else:
+                    latent_data = torch.cat((latent_data, latent), dim=0)
+                    conditions_data = torch.cat((conditions_data, conditions), dim=0)
+                    weights_data = torch.cat((weights_data, weights), dim=0)
 
-            trans2 = self.flow(self.mc_test_conditions).transform
-            self.samples = trans2.inv( sim_latent)
+            #########################################################
+            ##### from latent space to 'data'
+            
+            ## now lets create the latent dataset and dataloader
+            latent_dataset = torch.utils.data.TensorDataset(latent_data, conditions_data, weights_data)
+            latent_dataloader = torch.utils.data.DataLoader(latent_dataset, batch_size=8128)
+            
+            for batch in latent_dataloader:
+                inputs, conditions, weights = batch
+                inputs = inputs.to(self.device)
+                conditions = conditions.to(self.device)
+                weights = weights.to(self.device)
 
-            # lets save the means and std used for the transformations
-            np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'input_means.npy', self.input_mean_for_std)
-            np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'input_std.npy'  , self.input_std_for_std )
+                # Transform the data to the data space
+                flow_latent = self.flow(conditions).transform
+                sim_latent  = flow_latent.inv(inputs)
 
-            np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'conditions_means.npy', self.condition_mean_for_std)
-            np.save( os.getcwd() + '/results/' +self.configuration + '/'  +  'conditions_std.npy' , self.condition_std_for_std )
+                # Store the transformed data
+                if 'sim_data' not in locals():
+                    sim_data = sim_latent
+                    conditions_sim = conditions
+                    weights_sim = weights
+                else:
+                    sim_data = torch.cat((sim_data, sim_latent), dim=0)
+                    conditions_sim = torch.cat((conditions_sim, conditions), dim=0)
+                    weights_sim = torch.cat((weights_sim, weights), dim=0)
+            
+            self.samples = sim_data
+            #self.mc_test_conditions = conditions_sim
 
-            #np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'max_values.npy' , self.max_values )
-            #np.save( os.getcwd() + '/results/' +self.configuration + '/'  + 'min_values.npy' , self.min_values )
+            np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'input_means.npy', self.input_mean_for_std.cpu())
+            np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'input_std.npy'  , self.input_std_for_std.cpu() )
+
+            np.save( os.getcwd() + '/results/' +self.configuration + '/' +  'conditions_means.npy', self.condition_mean_for_std.cpu())
+            np.save( os.getcwd() + '/results/' +self.configuration + '/'  +  'conditions_std.npy' , self.condition_std_for_std.cpu() )
 
             # now, lets invert the transformations
             self.invert_transformation()
@@ -225,6 +287,7 @@ class Simulation_correction():
             # for the barrel only correlation matrix we must get the indices of the variables from the 'full' list
             match_indices_barrel = [index for index, item in enumerate(self.variables_list) if item in self.var_list_barrel_only]
             
+            # Lets do this before inverting the transformation, so we dont have issues with long tails and non-reliable correlation coeficients
             # Plotting the correlation matrices to better understand how the flows treats the correlations
             plot_utils.plot_correlation_matrix_diference_barrel(self.var_list_barrel_only , match_indices_barrel , self.data_test_inputs.clone().detach().cpu(), self.data_test_conditions.clone().detach().cpu(), self.data_test_weights.clone().detach().cpu(),  self.mc_test_inputs.clone().detach().cpu(), self.mc_test_conditions.clone().detach().cpu(), self.mc_test_weights.clone().detach().cpu() , self.samples.clone().detach().cpu(),  self.dump_folder)
             plot_utils.plot_correlation_matrix_diference_endcap(self.data_test_inputs.clone().detach().cpu(), self.data_test_conditions.clone().detach().cpu(), self.data_test_weights.clone().detach().cpu(),  self.mc_test_inputs.clone().detach().cpu(), self.mc_test_conditions.clone().detach().cpu(), self.mc_test_weights.clone().detach().cpu() , self.samples.clone().detach().cpu(),  self.dump_folder)
@@ -236,7 +299,6 @@ class Simulation_correction():
 
         return 0
 
-
     # this function will be responsable to perform the transformations in data
     def perform_transformation(self):
 
@@ -245,6 +307,16 @@ class Simulation_correction():
         self.vector_for_iso_constructors_mc   = []
         self.vector_for_iso_constructors_data = []
 
+        ### first step, since trkSumDR and trkSumDR04 are extremely correlated, we subtrack dr03 out of dr04
+        """
+        self.data_training_inputs[:,9]     = self.data_training_inputs[:,9] - self.data_training_inputs[:,8]
+        self.mc_training_inputs[:,9]       = self.mc_training_inputs[:,9]   - self.mc_training_inputs[:,8]
+        self.mc_validation_inputs[:,9]   = self.mc_validation_inputs[:,9]   - self.mc_validation_inputs[:,8]
+        self.data_validation_inputs[:,9] = self.data_validation_inputs[:,9] - self.data_validation_inputs[:,8]
+        self.mc_test_inputs[:,9]           = self.mc_test_inputs[:,9]       - self.mc_test_inputs[:,8]
+        self.data_test_inputs[:,9]         = self.data_test_inputs[:,9]     - self.data_test_inputs[:,8]
+        """
+        
         # Performing the transformations of the non-continious variables
         if len(self.indexes_for_iso_transform) > 0:
             
@@ -305,10 +377,11 @@ class Simulation_correction():
 
         # Lets not apply this for now!
         # Lets apply min max scale to the variables that undergo the shift and scale transformation
-        """ 
+        
         self.max_values = self.training_inputs[  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ][:,self.indexes_for_iso_transform].max(dim=0).values
         self.min_values = self.training_inputs[  self.training_conditions[:,  self.training_conditions.size()[1] -1 ] == 0   ][:,self.indexes_for_iso_transform].min(dim=0).values
-
+        
+        """
         if len(self.indexes_for_iso_transform) > 0:
             # Apply min-max scaling to the range [-4, 4]
             self.training_inputs[:,self.indexes_for_iso_transform] = -5 + (
@@ -322,16 +395,19 @@ class Simulation_correction():
             self.mc_test_inputs[:,self.indexes_for_iso_transform] = -5 + (
                 (self.mc_test_inputs[:,self.indexes_for_iso_transform] - self.min_values) * 10
             ) / (self.max_values - self.min_values)
-        """
         
+        """
         # Lets now plot the distirbutions after the transformations
-        plot_utils.plot_distributions_after_transformations(self.variables_list ,self.training_inputs.clone().detach().cpu(), self.conditions_list ,self.training_conditions.clone().detach().cpu(), self.training_weights.clone().detach().cpu())
+        print( "Ploting the validaiton of the transformations!!! " )
+        plot_utils.plot_distributions_after_transformations(self.variables_list ,self.training_inputs.clone().detach().cpu(), self.conditions_list ,self.training_conditions.clone().detach().cpu(), self.training_weights.clone().detach().cpu(), output_path = self.dump_folder + 'validation_plots/after_transformation/')
+        print( "End of the ploting the validaiton of the transformations!!! \n\n" )
 
     # this function will be responsable to perform the inverse transformations in data
     def invert_transformation(self):
         
         # Lets not apply this for now!
-        """ 
+        
+        """
         if len(self.indexes_for_iso_transform) > 0:
             # Revert the min-max scaling from [-4, 4] back to original
             self.training_inputs[:,self.indexes_for_iso_transform] = self.min_values + (
@@ -349,12 +425,13 @@ class Simulation_correction():
             self.samples[:,self.indexes_for_iso_transform] = self.min_values + (
                 (self.samples[:,self.indexes_for_iso_transform] + 5) * (self.max_values - self.min_values)
             ) / 10          
+        
         """
         
         # Transforming the training tensors
         if( self.perform_std_transform ):
-            self.training_inputs = ( self.training_inputs*self.input_std_for_std + self.input_mean_for_std  )
-            self.training_conditions[:,:-1] = ( self.training_conditions[:,:-1]*self.condition_std_for_std + self.condition_mean_for_std  )
+            #self.training_inputs = ( self.training_inputs*self.input_std_for_std + self.input_mean_for_std  )
+            #self.training_conditions[:,:-1] = ( self.training_conditions[:,:-1]*self.condition_std_for_std + self.condition_mean_for_std  )
 
             # inverse transforming the validation tensors
             self.validation_inputs = ( self.validation_inputs*self.input_std_for_std + self.input_mean_for_std  )
@@ -380,6 +457,17 @@ class Simulation_correction():
 
                 counter = counter + 1
 
+        ### now inverting the dr03 and dr04 subtraction
+        #self.data_training_inputs[:,9]     = self.data_training_inputs[:,9]   + self.data_training_inputs[:,8]
+        #self.mc_training_inputs[:,9]       = self.mc_training_inputs[:,9]     + self.mc_training_inputs[:,8]
+        """
+        self.mc_validation_inputs[:,9]     = self.mc_validation_inputs[:,9]   + self.mc_validation_inputs[:,8]
+        self.data_validation_inputs[:,9]   = self.data_validation_inputs[:,9] + self.data_validation_inputs[:,8]
+        self.mc_test_inputs[:,9]           = self.mc_test_inputs[:,9]         + self.mc_test_inputs[:,8]
+        self.data_test_inputs[:,9]         = self.data_test_inputs[:,9]       + self.data_test_inputs[:,8]
+        self.samples[:,9]                  = self.samples[:,9]                + self.samples[:,8]
+        """
+        
     # energy raw should not be correct, So i am removing it from the inputs here! it is always the first entry in the tensor
     def remove_energy_raw_from_training(self):
 

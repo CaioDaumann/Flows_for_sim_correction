@@ -41,15 +41,18 @@
         "fixedGridRhoAll"
     ],
     "data_files": [
-        "/net/scratch_cms3a/daumann/HiggsDNA/scripts/2023_production/TnP/TnP_2023_full_samples/DataC_2023/nominal/*.parquet",
-        "/net/scratch_cms3a/daumann/HiggsDNA/scripts/2023_production/TnP/TnP_2023_full_samples/DataD_2023/nominal/*.parquet"
+        "/net/data_cms3a-1/daumann/HiggsDNA/scripts/2024_data_runs/TnP/TnP_2024_Zee_production_full/DataC_2024/nominal/*.parquet",
+        "/net/data_cms3a-1/daumann/HiggsDNA/scripts/2024_data_runs/TnP/TnP_2024_Zee_production_full/DataD_2024/nominal/*.parquet",
+        "/net/data_cms3a-1/daumann/HiggsDNA/scripts/2024_data_runs/TnP/TnP_2024_Zee_production_full/DataE_2024/nominal/*.parquet",
+        "/net/data_cms3a-1/daumann/HiggsDNA/scripts/2024_data_runs/TnP/TnP_2024_Zee_production_full/DataF_2024/nominal/*.parquet",
+        "/net/data_cms3a-1/daumann/HiggsDNA/scripts/2024_data_runs/TnP/TnP_2024_Zee_production_full/DataG_2024/nominal/*.parquet",
+        "/net/data_cms3a-1/daumann/HiggsDNA/scripts/2024_data_runs/TnP/TnP_2024_Zee_production_full/DataH_2024/nominal/*.parquet",
+        "/net/data_cms3a-1/daumann/HiggsDNA/scripts/2024_data_runs/TnP/TnP_2024_Zee_production_full/DataI_2024/nominal/*.parquet"   
     ],
     "MC_files": [
-        "/net/scratch_cms3a/daumann/HiggsDNA/scripts/2023_production/TnP/TnP_2023_full_samples/DY_postBPIX/nominal/*.parquet",
-        "/net/scratch_cms3a/daumann/HiggsDNA/scripts/2023_production/TnP/TnP_2023_full_samples/DY_preBPIX/nominal/*.parquet"
+        "/net/data_cms3a-1/daumann/HiggsDNA/scripts/2024_data_runs/TnP/TnP_2024_Zee_production_full/Drell-Yan_2024/nominal/*.parquet"
     ],
     "MC_files_normalization": [
-        9.451,
         17.794
     ],
     "Index_for_Iso_transform":  [

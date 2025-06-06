@@ -43,9 +43,9 @@ def perform_reweighting(simulation_df, data_df):
     data_weights = data_weights/np.sum( data_weights )
 
     # Defining the reweigthing binning! - Bins were chossen such as each bin has ~ the same number of events
-    pt_bins  = calculate_bins_position(np.array(simulation_df["probe_pt"]), 30)
-    eta_bins = calculate_bins_position(np.array(simulation_df["probe_ScEta"]), 30)
-    rho_bins = calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 30) #np.linspace( 5,65, 30) #calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 70)
+    pt_bins  = calculate_bins_position(np.array(simulation_df["probe_pt"]), 40)
+    eta_bins = calculate_bins_position(np.array(simulation_df["probe_ScEta"]), 40)
+    rho_bins = calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 40) #np.linspace( 5,65, 30) #calculate_bins_position(np.nan_to_num(np.array(simulation_df["fixedGridRhoAll"])), 70)
 
     bins = [ pt_bins , eta_bins, rho_bins ]
 
@@ -79,7 +79,7 @@ def perform_zee_selection(df):
     # Define individual selection criteria
     mass_criteria = (df["mass"] > 80) & (df["mass"] < 100)
     tag_pt_criteria = df["tag_pt"] > 40
-    probe_pt_criteria = df["probe_pt"] > 20
+    probe_pt_criteria = df["probe_pt"] > 22
     eta_criteria = np.abs(df["probe_ScEta"]) < 2.5
     phi_criteria = np.abs(df["probe_phi"]) < np.pi
     tag_mvaID_criteria = df["tag_mvaID"] > 0.0
@@ -147,7 +147,7 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
 
     print( 'Number of MC events after equiparing! ', len( mc_conditions ), ' Number of data events: ', len(data_conditions))
 
-    training_percent = 0.7
+    training_percent = 0.85
     validation_percent = 0.03 + training_percent
     testing_percet = 1 - training_percent - validation_percent
 
@@ -159,6 +159,13 @@ def separate_training_data( data_df, mc_df, mc_weights, data_weights, input_vars
     mc_training_inputs     = mc_inputs[: int( training_percent*len(mc_inputs  )) ] 
     mc_training_conditions = mc_conditions[: int( training_percent*len(mc_inputs  )) ] 
     mc_training_weights    = mc_weights[: int( training_percent*len(mc_inputs  )) ] 
+
+    ### Now we only select MC events that have positive mc Weights
+    positive_weights_mask = mc_training_weights > 0
+    
+    mc_training_weights    = mc_training_weights[positive_weights_mask]
+    mc_training_conditions = mc_training_conditions[positive_weights_mask]
+    mc_training_inputs     = mc_training_inputs[positive_weights_mask]
 
     # now, the validation dataset
     data_validation_inputs     = data_inputs[int(training_percent*len(data_inputs  )):int( validation_percent*len(data_inputs  )) ] 
@@ -289,6 +296,10 @@ def read_zee_data(
     # Apply loose selection to reduce background
     data_df = perform_zee_selection(data_df)
     drell_yan_df = perform_zee_selection(drell_yan_df)
+
+    ### lets just select events where the weights are positive ... The reason is that the 
+    ### positive pt distirbutions with only postive weights are closer to the data than the abs(weights) distribution
+    drell_yan_df = drell_yan_df[drell_yan_df["weight"] > 0]
 
     # Save MC weights before reweighting for validation
     mc_weights_before = drell_yan_df["weight"].to_numpy()

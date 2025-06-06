@@ -63,35 +63,7 @@ def plott(data_hist,mc_hist,mc_rw_hist ,output_filename,xlabel, zmmg = None , po
     # Check if ax[0] is indeed a matplotlib Axes object
     if not isinstance(ax[0], plt.Axes):
         raise ValueError("ax[0] must be a matplotlib Axes object")
-    
-    # Fill the area with hatched grey lines until 0.25 on the x-axis
-    if( "mva" in str(xlabel) and 1 == 2  ):
-           
-        # Define the x and y ranges for the greyed out region
-        x_start, x_end = -0.9, 0.25
-        #y_start, y_end = 0, 2.0  # Adjust the y range as needed
-        # Get the current y-axis limits
-        y_start, y_end = ax[0].get_ylim()
-            
-        # Add a hatched rectangle to the plot
-        # Add a hatched rectangle to the plot
-        #rect = patches.Rectangle((x_start, y_start), x_end - x_start, y_end - y_start,
-        #                        linewidth=1, edgecolor='grey', facecolor='none', hatch='//', alpha=0.5)
-            
-        rect = patches.Rectangle((x_start, y_start), x_end - x_start, 1, transform=ax[0].get_xaxis_transform(), 
-                          edgecolor='grey', linewidth=1, alpha=0.5, facecolor='none', hatch='///')
-            
-        ax[0].add_patch(rect)
-
-        # Define the x and y ranges for the greyed out region
-        x_start, x_end = -0.9, 0.25
-        y_start, y_end = 0.5, 1.5  # Adjust the y range as needed
-
-        # Add a hatched rectangle to the plot
-        rect_ = patches.Rectangle((x_start, y_start), x_end - x_start, y_end - y_start,
-                                linewidth=1, edgecolor='grey', facecolor='none', hatch='///', alpha=0.5)
-        ax[1].add_patch(rect_)    
-    
+      
     hep.histplot(
             data_hist,
             density=True,
@@ -579,8 +551,8 @@ def plot_distributions_after_transformations(
 
         # Create histograms with appropriate binning
         #bins = hist.axis.Regular(70, mean - 3.0 * std, mean + 3.0 * std)
-        bins = hist.axis.Regular(70, -5.0, 5.0)
-        bins = hist.axis.Regular(70, np.min(data_values) , np.max(data_values))
+        bins = hist.axis.Regular(120, -5.0, 5.0)
+        #bins = hist.axis.Regular(70, np.min(np.nan_to_num(data_values)) , np.max(np.nan_to_num(data_values)))
         data_hist = hist.Hist(bins, storage=storage.Weight())
         mc_hist = hist.Hist(bins, storage=storage.Weight())
 
@@ -676,7 +648,6 @@ def plot_correlation_matrix_diference_barrel(
     mc_corrected_corr = cov_to_corr(mc_corrected_cov)
     """ 
 
-    
     # Function to compute weighted covariance matrix
     def weighted_covariance(X, weights):
         average = np.average(X, axis=0, weights=weights)
@@ -697,8 +668,8 @@ def plot_correlation_matrix_diference_barrel(
         corr[cov == 0] = 0
         return corr
 
-    data_corr = covariance_to_correlation(data_cov)
-    mc_corr = covariance_to_correlation(mc_cov)
+    data_corr         = covariance_to_correlation(data_cov)
+    mc_corr           = covariance_to_correlation(mc_cov)
     mc_corrected_corr = covariance_to_correlation(mc_corrected_cov)
 
     # Helper function to plot difference matrices
@@ -747,7 +718,7 @@ def plot_correlation_matrix_diference_endcap(data, data_conditions,data_weights,
     mask_mc,mask_data = np.abs(mc_conditions[:,1]) > 1.56, np.abs(data_conditions[:,1]) > 1.56
 
     # apply the barrel only condition
-    data, mc, mc_corrected              = data[mask_data]            , mc[mask_mc]             ,mc_corrected[mask_mc]
+    data, mc, mc_corrected             = data[mask_data]            , mc[mask_mc]             ,mc_corrected[mask_mc]
     data_conditions,mc_conditions      = data_conditions[mask_data] , mc_conditions[mask_mc]
     data_weights,mc_weights            = data_weights[mask_data]    , mc_weights[mask_mc]
     
